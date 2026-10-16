@@ -7,7 +7,7 @@ runs the deterministic gates, and only then publishes. Agents propose; gates dec
 from __future__ import annotations
 
 import logging
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from enum import StrEnum
 
@@ -30,6 +30,7 @@ from dabao.seams import (
     Signer,
     SuiteRunner,
 )
+from dabao.signing import SigningRefused
 
 log = logging.getLogger(__name__)
 
@@ -63,6 +64,7 @@ class Pipeline:
     registry: Registry
     signer: Signer
     clock: Clock
+    frozen: Callable[[], bool] = lambda: False  # operator kill switch: no new attempts
     gates: GateConfig = field(default_factory=GateConfig)
     limits: Limits = field(default_factory=Limits)
     owner: str = "orchestrator-1"
@@ -107,6 +109,8 @@ def _describe(verdict: Verdict) -> str:
 
 def process(session_factory: SessionFactory, p: Pipeline, affected_id: int) -> Outcome:
     """Run one attempt for one affected row. Never publishes unless every gate passes."""
+    if p.frozen():
+        return Outcome.PAUSED
     with session_factory() as session:
         if spent_last_month(session, p.clock.now()) >= p.limits.monthly_budget_usd:
             return Outcome.PAUSED
@@ -176,7 +180,7 @@ def _attempt(session: Session, p: Pipeline, affected_id: int) -> Outcome:
                 p.clock.now(),
             )
             return Outcome.UNPATCHED
-        return _publish(session, p, attempt, affected, patch, after)
+        return _publish(session, p, attempt, affected, patch, after, verdict)
     except Exception as exc:  # noqa: BLE001 - an attempt must never take the loop down
         log.exception("attempt %s aborted", attempt.id)
         session.rollback()
@@ -204,11 +208,26 @@ def _publish(
     affected: AffectedRow,
     patch: PatchModel,
     digest: str,
+    verdict: Verdict,
 ) -> Outcome:
     now = p.clock.now()
     tag = f"{affected.version}-dabao1"
+    try:
+        # Sign first: a refusal must leave nothing published. (A real registry pushes by digest,
+        # signs, then tags; the tag is what makes it public.)
+        p.signer.sign(digest, verdict)
+    except SigningRefused as exc:
+        _fail(
+            session,
+            attempt,
+            affected,
+            AdvisoryStatus.NEEDS_HUMAN,
+            "FAILED",
+            f"signer refused: {exc}",
+            now,
+        )
+        return Outcome.NEEDS_HUMAN
     p.registry.push(digest, f"{affected.image}:{tag}")
-    p.signer.sign(digest)
     session.add(
         PatchRow(
             attempt_id=attempt.id,
