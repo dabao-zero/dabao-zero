@@ -87,3 +87,14 @@ class ArtifactRow(Base):
     published_at: Mapped[float] = mapped_column(Float)
     revoked_at: Mapped[float | None] = mapped_column(Float, default=None)
     revoked_reason: Mapped[str | None] = mapped_column(Text, default=None)
+
+
+class FlagRow(Base):
+    """Operator switches (e.g. `frozen`). Absent means off, so a missing row can never freeze."""
+
+    __tablename__ = "flags"
+
+    name: Mapped[str] = mapped_column(String, primary_key=True)
+    value: Mapped[str] = mapped_column(String)  # "1" on; anything else off
+    note: Mapped[str] = mapped_column(Text, default="")
+    updated_at: Mapped[float] = mapped_column(Float)
