@@ -14,7 +14,7 @@ Done and merged: T0.1-T0.5 (stack ADR, agent brief, scaffold and seams, pre-push
 T1.5 gates, T1.6 known-good/bad corpus, T1.4 client half (OpenAI-compatible client and agent
 runner), T2.1 schema and migrations, T2.2 orchestrator and leases, T2.3 guarded signer
 (cosign backend untested live), T2.4 honest failure states, T2.5 operator CLI, T4.1 ingestion
-(fixture feeds only), T4.3 ledger site (first part), plus regctl package inventory.
+(fixture feeds only), T4.3 catalog site (catalog, image, fix and About pages; real registry and cosign links wait on publishing), plus regctl package inventory.
 Blocked on network allowlist and `LLM_API_KEY`: T1.1-T1.3, rest of T1.4, T1.7-T1.8, T2.6,
 live parts of T4.1, E3 live checks, E5, E6. Not started: T0.6, E3, T4.2, T4.4, T4.5.
 

@@ -3,10 +3,10 @@
 ## WHAT
 Free, open-source container images whose CVEs are fixed by LLM agents, with no human in the
 patch path. Python 3.13 / FastAPI / uv / pytest backend (ADR-0007); Svelte 5 + Vite 8
-ledger frontend in `frontend/`. Trust the code over these docs where they disagree, and fix the docs.
+catalog frontend in `frontend/`. Trust the code over these docs where they disagree, and fix the docs.
 
 **Built:** scaffold, seams and fakes, publish gates + known-good/bad corpus, DB schema and migrations,
-leases, orchestrator, `/v1` ledger API, ledger frontend, OpenAI-compatible agent client,
+leases, orchestrator, `/v1` ledger API, catalog frontend (dabao-zero UI), OpenAI-compatible agent client,
 regctl package inventory, guarded signer (`signing.py`), advisory parsing/ingestion (`ingest.py`,
 `versions.py`), operator CLI (`cli.py`, `operator.py`). **Not built:** real Debian/Alpine/Wolfi
 adapters, sandbox tool box, real cosign/registry publishing, live feed fetchers, anything that
