@@ -23,6 +23,7 @@ registries on 2026-10-16.
 **Frontend (only when the ledger UI is built, slice V4)**
 - **Svelte 5** (5.57.x), **Vite 8** (8.3.x, needs Node 20.19+ or 22.12+; use Node 22 LTS),
   **TypeScript**, **@sveltejs/vite-plugin-svelte 7**, **Vitest** for tests.
+- **TypeScript 6.0.x, not 7:** `svelte-check` 4.7 declares a peer range of TypeScript `^5 || ^6`, so 7.x cannot be installed without `--force`. Revisit when svelte-check supports 7.
 - Plain Svelte + Vite single-page app reading the `/v1` API or generated static JSON,
   not SvelteKit, because the ledger is read-only and has no server-side needs. SvelteKit
   (now 3.x) is the upgrade path if prerendered per-advisory pages or SEO prove necessary.
