@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: frontend-check help sync lint format typecheck test-unit test-integration check run hooks
+.PHONY: help sync lint format typecheck test-unit test-integration db-up db-down check frontend-check run hooks
 
 help: ## List targets
 	@grep -E '^[a-zA-Z_-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-18s %s\n", $$1, $$2}'
@@ -22,8 +22,14 @@ typecheck: ## mypy (strict)
 test-unit: ## Fast layer: no Docker, no network
 	uv run pytest tests/unit -q
 
-test-integration: ## Needs Docker
-	uv run pytest tests/integration -q -m integration
+test-integration: ## Postgres tests (run `make db-up` first); skips without DATABASE_URL_TEST
+	DATABASE_URL_TEST=$${DATABASE_URL_TEST:-postgresql+psycopg://postgres:postgres@localhost:5432/postgres} uv run pytest tests/integration -q -m integration
+
+db-up: ## Start a throwaway local Postgres 17 on :5432 (needs Docker)
+	docker run -d --rm --name dabao-pg -e POSTGRES_PASSWORD=postgres -p 5432:5432 postgres:17
+
+db-down: ## Stop the local Postgres
+	docker stop dabao-pg
 
 check: lint typecheck test-unit ## Everything the pre-push hook runs
 

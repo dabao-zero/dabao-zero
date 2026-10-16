@@ -9,3 +9,5 @@ __pycache__/
 *.pem
 *.key
 node_modules/
+*.db
+.claude/settings.local.json
