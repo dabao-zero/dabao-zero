@@ -21,7 +21,7 @@ the LLM is non-gating and scheduled.**
 
 | Seam | Real impl | Fake impl |
 |------|-----------|-----------|
-| `AgentRunner` | Anthropic API in a sandbox | Replays a recorded patch and transcript |
+| `AgentRunner` | OpenAI-compatible API (OpenRouter) in a sandbox | Replays a recorded patch and transcript |
 | `DistroAdapter` | Debian / Alpine / Wolfi builders | In-memory adapter returning canned packages |
 | `Scanner` | Grype, Trivy | Returns canned findings per image digest |
 | `Registry` | GHCR | Local OCI registry or in-memory |

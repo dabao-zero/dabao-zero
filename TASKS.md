@@ -48,6 +48,7 @@ then stories with `--epic`, then dependencies. See "Filing" at the bottom.
   **Do** fetch source at vulnerable version, apply patch, build `.deb`, assemble image.
   **Done when** - [ ] same inputs give the same digest - [ ] integration test builds it in a container
 - **T1.4 Sandboxed patch agent** (5 pts) Blocked by T1.3
+  **Why** uses an OpenAI-compatible endpoint (ADR-0008); needs `LLM_API_KEY` and `openrouter.ai` allowed.
   **Do** agent retrieves the upstream fix, backports it, emits a `Patch` with source and diff. Network limited to source mirror and package proxy.
   **Done when** - [ ] patch matches the upstream fix in substance for all 3 CVEs - [ ] egress test proves nothing else is reachable
 - **T1.5 Gate runner** (5 pts) Blocked by T1.3
