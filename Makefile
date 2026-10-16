@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help sync lint format typecheck test-unit test-integration check run hooks
+.PHONY: frontend-check help sync lint format typecheck test-unit test-integration check run hooks
 
 help: ## List targets
 	@grep -E '^[a-zA-Z_-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-18s %s\n", $$1, $$2}'
@@ -26,6 +26,9 @@ test-integration: ## Needs Docker
 	uv run pytest tests/integration -q -m integration
 
 check: lint typecheck test-unit ## Everything the pre-push hook runs
+
+frontend-check: ## Frontend: svelte-check, vitest, build (needs Node 22)
+	cd frontend && npm ci && npm run check && npm test && npm run build
 
 run: ## Dev server on the first free port from 8000
 	uv run python scripts/run_dev.py
