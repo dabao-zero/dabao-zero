@@ -59,6 +59,7 @@ class AttemptRow(Base):
     tokens_out: Mapped[int] = mapped_column(Integer, default=0)
     cost_usd: Mapped[float] = mapped_column(Float, default=0.0)
     log: Mapped[str] = mapped_column(Text, default="")
+    verdict: Mapped[str | None] = mapped_column(Text, default=None)  # JSON gate results
 
     affected: Mapped[AffectedRow] = relationship(back_populates="attempts")
     patch: Mapped[PatchRow | None] = relationship(back_populates="attempt", uselist=False)
@@ -98,3 +99,14 @@ class FlagRow(Base):
     value: Mapped[str] = mapped_column(String)  # "1" on; anything else off
     note: Mapped[str] = mapped_column(Text, default="")
     updated_at: Mapped[float] = mapped_column(Float)
+
+
+class ImageRow(Base):
+    """Catalog metadata for an image: what a visitor sees before any advisory."""
+
+    __tablename__ = "images"
+
+    name: Mapped[str] = mapped_column(String, primary_key=True)
+    description: Mapped[str] = mapped_column(Text, default="")
+    upstream: Mapped[str] = mapped_column(String, default="")  # official image it replaces
+    created_at: Mapped[float] = mapped_column(Float)
