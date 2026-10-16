@@ -1,45 +1,46 @@
 <script lang="ts">
+  import { SITE_NAME } from "./lib/config";
   import { parseRoute } from "./lib/format";
-  import Advisory from "./pages/Advisory.svelte";
+  import TopBar from "./components/TopBar.svelte";
+  import About from "./pages/About.svelte";
+  import Catalog from "./pages/Catalog.svelte";
+  import Fix from "./pages/Fix.svelte";
   import Image from "./pages/Image.svelte";
-  import Images from "./pages/Images.svelte";
 
-  let route = $state(parseRoute(window.location.hash));
+  let hash = $state(window.location.hash);
+  const route = $derived(parseRoute(hash));
+
   $effect(() => {
-    const onChange = () => (route = parseRoute(window.location.hash));
+    const onChange = () => (hash = window.location.hash);
     window.addEventListener("hashchange", onChange);
     return () => window.removeEventListener("hashchange", onChange);
   });
+
+  $effect(() => {
+    const r = route;
+    document.title =
+      r.page === "image" ? `${r.name} · ${SITE_NAME}`
+      : r.page === "fix" ? `${r.id} · ${SITE_NAME}`
+      : r.page === "about" ? `About · ${SITE_NAME}`
+      : SITE_NAME;
+  });
 </script>
 
-<main>
-  {#if route.page === "images"}
-    <Images />
+<TopBar page={route.page} />
+<main class="page">
+  {#if route.page === "catalog"}
+    <Catalog />
   {:else if route.page === "image"}
-    <Image name={route.name} />
-  {:else if route.page === "advisory"}
-    <Advisory id={route.id} />
+    {#key route.name}<Image name={route.name} tab={route.tab} />{/key}
+  {:else if route.page === "fix"}
+    {#key route.id}<Fix id={route.id} row={route.row} />{/key}
+  {:else if route.page === "about"}
+    <About />
   {:else}
-    <h1>Not found</h1>
-    <p><a href="#/">Back to images</a></p>
+    <h1 class="ts-headline-large" style="margin-top: 32px;">Page not found</h1>
+    <p class="ts-body-large muted"><a class="link" href="#/">Back to all images</a></p>
   {/if}
-  <footer>
-    Free and open source. Provided as is, without warranty or SLA; use at your own risk.
-  </footer>
 </main>
-
-<style>
-  :global(body) { font-family: system-ui, sans-serif; margin: 0; color: #1a1a1a; background: #fff; }
-  @media (prefers-color-scheme: dark) {
-    :global(body) { color: #e8e8e8; background: #14161a; }
-    :global(a) { color: #8ab4ff; }
-  }
-  main { max-width: 60rem; margin: 0 auto; padding: 1rem 16px; }
-  :global(table) { border-collapse: collapse; width: 100%; display: block; overflow-x: auto; }
-  :global(th), :global(td) { text-align: left; padding: 0.4rem 0.8rem; border-bottom: 1px solid #8884; }
-  :global(pre) { overflow-x: auto; padding: 0.8rem; background: #8882; }
-  :global(.status) { padding: 0.1rem 0.5rem; border-radius: 0.8rem; background: #8883; font-size: 0.85em; }
-  :global(.status.patched) { background: #2a7a3b44; }
-  :global(.status.unpatched), :global(.status.needs_human) { background: #b3261e44; }
-  footer { margin-top: 3rem; font-size: 0.85em; opacity: 0.8; }
-</style>
+<footer class="page ts-label-small muted" style="padding-top: 24px;">
+  Free and open source. Provided as is, without warranty or SLA; use at your own risk.
+</footer>

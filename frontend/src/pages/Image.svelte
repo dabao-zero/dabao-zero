@@ -1,30 +1,16 @@
 <script lang="ts">
   import { api } from "../lib/api";
-  import { formatDate } from "../lib/format";
-  import Async from "../lib/Async.svelte";
+  import type { ImageTab } from "../lib/format";
+  import Async from "../components/Async.svelte";
+  import ImageView from "./ImageView.svelte";
 
-  let { name }: { name: string } = $props();
+  let { name, tab }: { name: string; tab: ImageTab } = $props();
 </script>
 
-<p><a href="#/">← Images</a></p>
-<h1>{name}</h1>
 <Async load={() => api.image(name)}>
-  {#snippet children(rows)}
-    <table>
-      <thead>
-        <tr><th>Advisory</th><th>Stream</th><th>Package</th><th>Status</th><th>First seen</th></tr>
-      </thead>
-      <tbody>
-        {#each rows as r (r.id)}
-          <tr>
-            <td><a href={`#/advisories/${encodeURIComponent(r.advisory_id)}`}>{r.advisory_id}</a></td>
-            <td>{r.stream}</td>
-            <td>{r.package} {r.version}</td>
-            <td><span class="status {r.status.toLowerCase()}">{r.status}</span></td>
-            <td>{formatDate(r.created_at)}</td>
-          </tr>
-        {/each}
-      </tbody>
-    </table>
+  {#snippet children(image)}<ImageView {image} {tab} />{/snippet}
+  {#snippet notFound()}
+    <h1 class="ts-headline-large" style="margin-top: 32px;">No image called {name}</h1>
+    <p class="ts-body-large muted" style="margin-top: 8px;"><a class="link" href="#/">Back to all images</a></p>
   {/snippet}
 </Async>
