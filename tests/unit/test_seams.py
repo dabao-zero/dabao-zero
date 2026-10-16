@@ -34,8 +34,8 @@ def test_fakes_satisfy_seams() -> None:
 
 def test_agent_replay_returns_recorded_patch_or_none() -> None:
     runner = fakes.FakeAgentRunner({(ADV.id, "nginx"): PATCH})
-    assert runner.propose_patch(ADV, COMP) == PATCH
-    assert runner.propose_patch(Advisory(id="CVE-2024-9999"), COMP) is None
+    assert runner.propose_patch(ADV, COMP).patch == PATCH
+    assert runner.propose_patch(Advisory(id="CVE-2024-9999"), COMP).patch is None
 
 
 def test_build_is_reproducible_and_patch_changes_digest() -> None:

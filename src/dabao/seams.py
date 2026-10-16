@@ -8,8 +8,19 @@ from typing import Protocol
 from dabao.models import Advisory, Component, Finding, Patch
 
 
+@dataclass(frozen=True)
+class AgentResult:
+    """What an agent run produced and what it cost. `patch` is None when it found no fix."""
+
+    patch: Patch | None
+    tokens_in: int = 0
+    tokens_out: int = 0
+    cost_usd: float = 0.0
+    log: str = ""
+
+
 class AgentRunner(Protocol):
-    def propose_patch(self, advisory: Advisory, component: Component) -> Patch | None: ...
+    def propose_patch(self, advisory: Advisory, component: Component) -> AgentResult: ...
 
 
 class DistroAdapter(Protocol):
