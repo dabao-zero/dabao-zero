@@ -1,0 +1,17 @@
+{
+  "nginx": {
+    "CVE-2099-0004": {
+      "description": "demo",
+      "releases": {
+        "bookworm": {"status": "resolved", "fixed_version": "1.22.1-9+deb12u1", "urgency": "medium"},
+        "bullseye": {"status": "resolved", "fixed_version": "1.18.0-6.1+deb11u9", "urgency": "medium"}
+      }
+    },
+    "CVE-2099-0005": {
+      "releases": {"bookworm": {"status": "open", "urgency": "low"}}
+    },
+    "CVE-2099-0006": {
+      "releases": {"bookworm": {"status": "resolved", "fixed_version": "0", "urgency": "not yet assigned"}}
+    }
+  }
+}
