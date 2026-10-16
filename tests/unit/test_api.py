@@ -95,3 +95,13 @@ def test_revoke_marks_artifact_and_is_idempotent(
         c.post("/v1/artifacts/sha256:nope/revoke", json={"reason": "x"}, headers=h).status_code
         == 404
     )
+
+
+def test_status_reports_freeze_state(seeded: sessionmaker[Session], clock: FakeClock) -> None:
+    from dabao import operator
+
+    c = client(seeded, clock)
+    assert c.get("/v1/status").json() == {"frozen": False}
+    with seeded() as s:
+        operator.freeze(s, "incident", 1.0)
+    assert c.get("/v1/status").json() == {"frozen": True}

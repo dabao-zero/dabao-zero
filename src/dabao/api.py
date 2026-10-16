@@ -155,6 +155,10 @@ def create_app(
 
     v1 = APIRouter(prefix="/v1")
 
+    @v1.get("/status")
+    def ledger_status(session: SessionDep) -> dict[str, bool]:
+        return {"frozen": repo.get_flag(session, "frozen")}
+
     @v1.get("/images", response_model=list[ImageSummaryOut])
     def images(session: SessionDep) -> list[dict[str, object]]:
         return repo.image_summaries(session)
