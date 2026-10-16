@@ -1,0 +1,22 @@
+"""Start the dev server on the first free port at or above 8000 and print it."""
+
+import socket
+
+import uvicorn
+
+
+def free_port(start: int = 8000) -> int:
+    for port in range(start, start + 100):
+        with socket.socket() as s:
+            try:
+                s.bind(("127.0.0.1", port))
+            except OSError:
+                continue
+            return port
+    raise RuntimeError("no free port found")
+
+
+if __name__ == "__main__":
+    port = free_port()
+    print(f"dabao dev server: http://127.0.0.1:{port}")
+    uvicorn.run("dabao.api:app", host="127.0.0.1", port=port, reload=True)
