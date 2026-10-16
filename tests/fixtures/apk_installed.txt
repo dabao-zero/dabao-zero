@@ -1,0 +1,10 @@
+C:Q1abc=
+P:alpine-baselayout
+V:3.6.5-r0
+A:x86_64
+T:Alpine base dir structure and init scripts
+
+C:Q1def=
+P:musl
+V:1.2.5-r0
+o:musl

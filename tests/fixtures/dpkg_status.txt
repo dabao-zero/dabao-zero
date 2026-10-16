@@ -1,0 +1,15 @@
+Package: adduser
+Status: install ok installed
+Version: 3.134
+Depends: passwd
+Description: add and remove users and groups
+ This package includes the 'adduser' and 'deluser' commands.
+ Status: not a field, just a continuation line
+
+Package: removed-pkg
+Status: deinstall ok config-files
+Version: 1.0
+
+Package: libssl3
+Status: install ok installed
+Version: 3.0.11-1~deb12u2
