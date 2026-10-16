@@ -235,3 +235,30 @@ def test_frozen_switch_stops_new_attempts(pending: sessionmaker[Session]) -> Non
     assert row(pending).status == "PENDING"
     with pending() as s:
         assert s.scalars(select(AttemptRow)).all() == []
+
+
+def test_attempt_stores_the_gate_verdict_for_the_fix_page(
+    pending: sessionmaker[Session],
+) -> None:
+    import json
+
+    assert process(pending, pipeline(), 1) is Outcome.PUBLISHED
+    with pending() as s:
+        gates = json.loads(s.scalars(select(AttemptRow)).one().verdict or "[]")
+    assert [g["name"] for g in gates] == [
+        "advisory_present_before",
+        "scanners_clear",
+        "tests_pass",
+        "build_diff",
+        "provenance",
+    ]
+    assert all(g["passed"] for g in gates)
+
+
+def test_failed_attempt_stores_which_gate_failed(pending: sessionmaker[Session]) -> None:
+    import json
+
+    assert process(pending, pipeline(still_vulnerable=True), 1) is Outcome.UNPATCHED
+    with pending() as s:
+        gates = json.loads(s.scalars(select(AttemptRow)).one().verdict or "[]")
+    assert {g["name"] for g in gates if not g["passed"]} == {"scanners_clear"}

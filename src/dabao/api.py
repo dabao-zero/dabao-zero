@@ -5,14 +5,15 @@ from __future__ import annotations
 import hmac
 import time
 from collections.abc import Iterator
+from dataclasses import asdict
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, Request
+from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from dabao import repo
+from dabao import catalog, repo
 from dabao.db import SessionFactory, make_engine, make_session_factory
 from dabao.orm import AdvisoryRow, AffectedRow, ArtifactRow, AttemptRow
 from dabao.seams import Clock
@@ -22,6 +23,12 @@ from dabao.settings import Settings
 class SystemClock:
     def now(self) -> float:
         return time.time()
+
+
+class GateOut(BaseModel):
+    name: str
+    passed: bool
+    reason: str
 
 
 class AttemptOut(BaseModel):
@@ -35,6 +42,7 @@ class AttemptOut(BaseModel):
     patch_source: str | None
     patch_upstream_ref: str | None
     patch_diff: str | None
+    gates: list[GateOut] | None
 
 
 class AffectedOut(BaseModel):
@@ -61,11 +69,59 @@ class AdvisoryOut(BaseModel):
 
 class ImageSummaryOut(BaseModel):
     name: str
+    description: str
+    upstream: str
+    bases: list[str]
+    latest_tag: str | None
+    updated_at: float | None
     total: int
+    open: int
+    fixed: int
     patched: int
     unpatched: int
     pending: int
+    needs_human: int
     median_time_to_patch_s: float | None
+
+
+class TagOut(BaseModel):
+    digest: str
+    tag: str
+    stream: str
+    status: str
+    published_at: float
+    revoked_at: float | None
+    revoked_reason: str | None
+    open_cves: int
+    fixed_cves: int
+
+
+class ImageDetailOut(ImageSummaryOut):
+    tags: list[TagOut]
+    advisories: list[AffectedOut]
+
+
+class StatsOut(BaseModel):
+    attempts: int
+    fixes: int
+    median_time_to_fix_s: float | None
+    median_cost_per_fix_usd: float | None
+    failed_spend_usd: float
+    total_spend_usd: float
+
+
+class RunOut(BaseModel):
+    attempt_id: int
+    advisory_id: str
+    image: str
+    package: str
+    outcome: str
+    status: str
+    started_at: float
+    duration_s: float | None
+    tokens_in: int
+    tokens_out: int
+    cost_usd: float
 
 
 class ArtifactOut(BaseModel):
@@ -83,6 +139,16 @@ class RevokeIn(BaseModel):
     reason: str
 
 
+def _gates(raw: str | None) -> list[GateOut] | None:
+    gates: list[GateOut] = []
+    for item in catalog.parse_verdict(raw) or []:
+        try:
+            gates.append(GateOut.model_validate(item))
+        except ValueError:
+            continue  # a malformed stored entry must not take the page down
+    return gates or None
+
+
 def _attempt(a: AttemptRow) -> AttemptOut:
     p = a.patch
     return AttemptOut(
@@ -96,6 +162,7 @@ def _attempt(a: AttemptRow) -> AttemptOut:
         patch_source=p.source if p else None,
         patch_upstream_ref=p.upstream_ref if p else None,
         patch_diff=p.diff if p else None,
+        gates=_gates(a.verdict),
     )
 
 
@@ -160,15 +227,30 @@ def create_app(
         return {"frozen": repo.get_flag(session, "frozen")}
 
     @v1.get("/images", response_model=list[ImageSummaryOut])
-    def images(session: SessionDep) -> list[dict[str, object]]:
-        return repo.image_summaries(session)
+    def images(session: SessionDep) -> list[catalog.ImageSummary]:
+        return catalog.image_summaries(session)
 
-    @v1.get("/images/{name}", response_model=list[AffectedOut])
-    def image(name: str, session: SessionDep) -> list[AffectedOut]:
-        rows = repo.affected_for_image(session, name)
-        if not rows:
+    @v1.get("/images/{name}", response_model=ImageDetailOut)
+    def image(name: str, session: SessionDep) -> ImageDetailOut:
+        found = catalog.get_image(session, name)
+        if found is None:
             raise HTTPException(404, "unknown image")
-        return [_affected(r) for r in rows]
+        summary, tags, rows = found
+        return ImageDetailOut(
+            **asdict(summary),
+            tags=[TagOut(**asdict(t)) for t in tags],
+            advisories=[_affected(r) for r in rows],
+        )
+
+    @v1.get("/stats", response_model=StatsOut)
+    def stats(session: SessionDep) -> catalog.Stats:
+        return catalog.stats(session)
+
+    @v1.get("/runs", response_model=list[RunOut])
+    def runs(
+        session: SessionDep, limit: Annotated[int, Query(ge=1, le=100)] = 20
+    ) -> list[catalog.Run]:
+        return catalog.recent_runs(session, limit)
 
     @v1.get("/advisories", response_model=list[AffectedOut])
     def advisories(session: SessionDep, status: str | None = None) -> list[AffectedOut]:
