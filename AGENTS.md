@@ -7,11 +7,13 @@ ledger frontend in `frontend/`. Trust the code over these docs where they disagr
 
 **Built:** scaffold, seams and fakes, publish gates + known-good/bad corpus, DB schema and migrations,
 leases, orchestrator, `/v1` ledger API, ledger frontend, OpenAI-compatible agent client,
-regctl package inventory. **Not built:** real Debian/Alpine/Wolfi adapters, sandbox tool box,
-signer service, advisory ingestion, anything that needs Docker, Debian mirrors or a live LLM.
+regctl package inventory, guarded signer (`signing.py`), advisory parsing/ingestion (`ingest.py`,
+`versions.py`), operator CLI (`cli.py`, `operator.py`). **Not built:** real Debian/Alpine/Wolfi
+adapters, sandbox tool box, real cosign/registry publishing, live feed fetchers, anything that
+needs Docker, Debian mirrors or a live LLM.
 
 Map: `src/dabao/` (`gates.py`, `orchestrator.py`, `agent.py`, `llm.py`, `seams.py` + `fakes.py`,
-`api.py`, `orm.py`), `migrations/`, `tests/{unit,integration,corpus}`, `frontend/`.
+`api.py`, `orm.py`, `signing.py`, `ingest.py`, `cli.py`), `migrations/`, `tests/{unit,integration,corpus}`, `frontend/`.
 Docs: `PLAN.md` (what and why), `docs/adr/` (decisions, do not relitigate), `SLICES.md`,
 `TASKS.md` (backlog), `docs/testing-and-ci.md` (test layers and CI rules).
 

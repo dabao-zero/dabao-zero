@@ -12,3 +12,10 @@ updates:
     directory: /frontend
     schedule:
       interval: weekly
+    ignore:
+      # svelte-check's peer range is TypeScript ^5 || ^6 (ADR-0007); revisit when it allows 7.
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
+      # Keep type definitions on the Node major we run in CI (frontend/.node-version).
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
