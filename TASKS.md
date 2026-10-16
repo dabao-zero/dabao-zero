@@ -103,7 +103,7 @@ then stories with `--epic`, then dependencies. See "Filing" at the bottom.
 - **T4.2 Expand to ~15 images on Debian** (5 pts) Blocked by T4.1
 - **T4.3 Ledger site (Svelte 5 + Vite 8 + TypeScript)** (3 pts) Blocked by T2.1
   **Why** ADR-0007; re-check Svelte/Vite versions before scaffolding.
-  **Done when** - [ ] `frontend` CI job passes (svelte-check, vitest, build) - - [ ] image and advisory pages show status, attempts, diff, time-to-patch
+  **Done when** - [ ] `frontend` CI job passes (svelte-check, vitest, build) - [ ] image and advisory pages show status, attempts, diff, time-to-patch
 - **T4.4 Live-model eval harness (non-gating)** (3 pts) Blocked by T2.2
   **Done when** - [ ] scheduled run reports success rate, time, cost per patch with a hard cost cap
 - **T4.5 Observability floor** (2 pts) Blocked by T2.2
