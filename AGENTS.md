@@ -8,7 +8,7 @@ uv, pytest (ADR-0007); Svelte + Vite frontend from slice V4. Start at `PLAN.md`;
 built yet. Trust the code over these docs where they disagree, and fix the docs.
 
 ## HOW
-- `make` lists targets. `make sync` installs; `make check` (lint, mypy, unit) is the pre-push hook.
+- `make` lists targets. Schema changes need an Alembic migration (`uv run alembic revision --autogenerate`); a test fails on drift. `make sync` installs; `make check` (lint, mypy, unit) is the pre-push hook.
   `make hooks` installs it. `make test-integration` needs Docker.
 - Branch per slice off fresh `main`, PR only, never push to `main`; merge when CI is green.
 - Gates and publish must be deterministic: agents are faked in tests (`dabao.fakes`); real model

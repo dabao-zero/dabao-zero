@@ -15,6 +15,7 @@ class PatchSource(StrEnum):
 
 
 class AdvisoryStatus(StrEnum):
+    PENDING = "PENDING"
     PATCHED = "PATCHED"
     UNPATCHED = "UNPATCHED"
     NOT_AFFECTED = "NOT_AFFECTED"
