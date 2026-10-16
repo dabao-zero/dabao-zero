@@ -13,10 +13,9 @@ then stories with `--epic`, then dependencies. See "Filing" at the bottom.
 **Done when** a PR with a failing unit test is blocked by CI; the pre-push hook runs in under 30s.
 **Not in scope** publish workflow (E2).
 
-- **T0.1 Record the stack and tooling in ADR-0007** (1 pt)
-  **Why** docs/testing-and-ci.md assumes Python/uv/pytest/Actions without a decision.
-  **Do** decide language, package manager, linter, type-checker, CI; write ADR-0007.
-  **Done when** - [ ] ADR-0007 merged - [ ] testing-and-ci.md matches it
+- **T0.1 Confirm ADR-0007 and pin versions** (1 pt)
+  **Why** ADR-0007 fixes the stack (Python/FastAPI/uv/pytest; Svelte/Vite for the V4 frontend); exact versions must be locked.
+  **Done when** - [ ] `uv.lock` committed - [ ] Python 3.13 pinned in `.python-version` - [ ] re-check of package versions recorded
 - **T0.2 Add CLAUDE.md agent brief** (1 pt) Blocked by T0.1
   **Why** agents should follow the layering and PR rules by default.
   **Do** honest status, exact commands, conventions, "trust the code over the docs".
@@ -102,8 +101,9 @@ then stories with `--epic`, then dependencies. See "Filing" at the bottom.
 - **T4.1 Advisory ingest (NVD, OSV, Debian tracker)** (5 pts) Blocked by T2.2
   **Done when** - [ ] re-polling creates no duplicates - [ ] alias resolution handles CVE/GHSA/distro IDs
 - **T4.2 Expand to ~15 images on Debian** (5 pts) Blocked by T4.1
-- **T4.3 Static ledger site** (3 pts) Blocked by T2.1
-  **Done when** - [ ] image and advisory pages show status, attempts, diff, time-to-patch
+- **T4.3 Ledger site (Svelte 5 + Vite 8 + TypeScript)** (3 pts) Blocked by T2.1
+  **Why** ADR-0007; re-check Svelte/Vite versions before scaffolding.
+  **Done when** - [ ] `frontend` CI job passes (svelte-check, vitest, build) - - [ ] image and advisory pages show status, attempts, diff, time-to-patch
 - **T4.4 Live-model eval harness (non-gating)** (3 pts) Blocked by T2.2
   **Done when** - [ ] scheduled run reports success rate, time, cost per patch with a hard cost cap
 - **T4.5 Observability floor** (2 pts) Blocked by T2.2

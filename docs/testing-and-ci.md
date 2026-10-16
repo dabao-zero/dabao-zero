@@ -3,9 +3,7 @@
 Applies the dev-playbook to dabao-zero. Principle: layer checks by cost, gate by layer,
 and never let a slow check gate a local push.
 
-**Stack assumption (not yet decided in an ADR):** Python orchestrator (uv, ruff, pytest, mypy),
-GitHub Actions. Change the commands, not the layering, if that changes. Task T0.1 turns this
-into ADR-0007.
+**Stack (ADR-0007):** Python 3.13, FastAPI, uv, pytest, ruff, mypy; frontend (from V4) is Svelte 5 + Vite 8 + TypeScript with Vitest; GitHub Actions.
 
 ## What is different here: the LLM is the nondeterministic part
 
@@ -81,7 +79,8 @@ No Docker, under ~30s. Install: `ln -sf ../../scripts/git-hooks/pre-push .git/ho
 | `e2e-replay` | yes from V2 | Network off; recorded agent |
 | `secret-scan` (gitleaks) | yes | Credentials must never enter git |
 | `dep-scan` (Grype on lockfile/our images) | yes | We run our own scanners on ourselves |
-| `docs` (build ledger site/docs) | yes from V4 | |
+| `docs` (build docs) | yes from V4 | |
+| `frontend` (svelte-check, tsc, vitest, `vite build`; Node 22, `npm ci`) | yes from V4 | Path-filtered; reports green when frontend is untouched |
 
 Path filters may skip docs-only changes, but required checks must still report (gate-safe skip).
 Pin actions to resolving tags and sweep all workflows when the runner deprecates a runtime.
