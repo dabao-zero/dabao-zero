@@ -1,0 +1,36 @@
+[
+  {
+    "id": "DSA-9999-1",
+    "aliases": ["CVE-2099-0001"],
+    "affected": [
+      {
+        "package": {"ecosystem": "Debian:12", "name": "nginx"},
+        "ranges": [{"type": "ECOSYSTEM", "events": [{"introduced": "0"}, {"fixed": "1.22.1-9"}]}]
+      }
+    ]
+  },
+  {
+    "id": "GHSA-demo-aaaa-bbbb",
+    "aliases": ["CVE-2099-0001", "CVE-2099-0002"],
+    "affected": [
+      {
+        "package": {"ecosystem": "Debian:12", "name": "libssl3"},
+        "ranges": [{"type": "ECOSYSTEM", "events": [{"introduced": "0"}, {"fixed": "3.0.11-1~deb12u3"}]}]
+      },
+      {
+        "package": {"ecosystem": "npm", "name": "left-pad"},
+        "ranges": [{"type": "SEMVER", "events": [{"introduced": "0"}, {"fixed": "1.3.0"}]}]
+      }
+    ]
+  },
+  {
+    "id": "CVE-2099-0003",
+    "affected": [
+      {
+        "package": {"ecosystem": "Debian:12", "name": "libxml2"},
+        "ranges": [{"type": "ECOSYSTEM", "events": [{"introduced": "0"}]}]
+      }
+    ]
+  },
+  {"id": "BROKEN", "affected": "not a list"}
+]
