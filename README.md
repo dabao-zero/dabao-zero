@@ -62,7 +62,9 @@ cd frontend && npm ci
 DABAO_API=http://127.0.0.1:8000 npm run dev    # open the URL Vite prints
 ```
 
-![The ledger UI showing three demo images with patched, unpatched and pending counts](docs/img/ledger-demo.png)
+![The dabao-zero catalog with six demo images, each showing its open CVE count](docs/img/ledger-demo.png)
+
+![An image page with its tag table, including a revoked tag](docs/img/image-demo.png)
 
 ## Usage
 
