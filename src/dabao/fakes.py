@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass, field
 
+from dabao.gates import Verdict
 from dabao.models import Advisory, Component, Finding, Patch
 from dabao.seams import AgentResult, SuiteResult
 
@@ -29,7 +31,8 @@ class FakeDistroAdapter:
 
     def build_image(self, component: Component, patch: Patch | None) -> str:
         suffix = patch.upstream_ref if patch else "unpatched"
-        return f"sha256:{component.stream}-{component.package}-{component.version}-{suffix}"
+        key = f"{component.stream}-{component.package}-{component.version}-{suffix}"
+        return "sha256:" + hashlib.sha256(key.encode()).hexdigest()
 
 
 @dataclass
@@ -51,7 +54,10 @@ class FakeRegistry:
 
 @dataclass
 class FakeSigner:
-    def sign(self, image_digest: str) -> str:
+    signed: list[str] = field(default_factory=list)
+
+    def sign(self, image_digest: str, verdict: Verdict) -> str:
+        self.signed.append(image_digest)
         return f"sig:{image_digest}"
 
 

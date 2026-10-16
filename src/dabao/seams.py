@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
 from dabao.models import Advisory, Component, Finding, Patch
+
+if TYPE_CHECKING:
+    from dabao.gates import Verdict
 
 
 @dataclass(frozen=True)
@@ -40,8 +43,8 @@ class Registry(Protocol):
 
 
 class Signer(Protocol):
-    def sign(self, image_digest: str) -> str:
-        """Return a signature reference."""
+    def sign(self, image_digest: str, verdict: Verdict) -> str:
+        """Return a signature reference. May raise SigningRefused."""
         ...
 
 

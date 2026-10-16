@@ -24,6 +24,7 @@ class GateResult:
 @dataclass(frozen=True)
 class Verdict:
     results: tuple[GateResult, ...]
+    digest: str = ""  # the image digest this verdict is about; the signer checks it
 
     @property
     def passed(self) -> bool:
@@ -160,4 +161,4 @@ _GATES = (
 
 def run_gates(inp: GateInput, cfg: GateConfig) -> Verdict:
     """Run every gate (no short-circuit, so the ledger shows all failures)."""
-    return Verdict(tuple(g(inp, cfg) for g in _GATES))
+    return Verdict(tuple(g(inp, cfg) for g in _GATES), digest=inp.after_digest)

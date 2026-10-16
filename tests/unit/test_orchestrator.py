@@ -13,6 +13,7 @@ from dabao.models import Component, Finding, Patch, PatchSource
 from dabao.orchestrator import Limits, Outcome, Pipeline, process, run_once
 from dabao.orm import AdvisoryRow, AffectedRow, ArtifactRow, AttemptRow, PatchRow
 from dabao.seams import SuiteResult
+from dabao.signing import GuardedSigner
 
 SRC = "https://github.com/nginx/nginx/commit/"
 CFG = GateConfig(provenance_allowlist=(SRC,))
@@ -202,3 +203,35 @@ def test_run_once_stops_when_paused(pending: sessionmaker[Session]) -> None:
         s.commit()
     p = pipeline(limits=replace(Limits(), monthly_budget_usd=5.0))
     assert run_once(pending, p) == {"paused": 1}
+
+
+def test_signer_refusal_publishes_nothing_and_needs_a_human(
+    pending: sessionmaker[Session],
+) -> None:
+    p = pipeline()
+    p.signer = GuardedSigner(fakes.FakeSigner(), is_revoked=lambda _d: True)
+    assert process(pending, p, 1) is Outcome.NEEDS_HUMAN
+    assert row(pending).status == "NEEDS_HUMAN"
+    assert p.registry.pushed == {}  # type: ignore[attr-defined]
+    with pending() as s:
+        assert s.scalars(select(ArtifactRow)).all() == []
+        assert "signer refused" in s.scalars(select(AttemptRow)).one().log
+
+
+def test_guarded_signer_accepts_a_real_passing_verdict_end_to_end(
+    pending: sessionmaker[Session],
+) -> None:
+    p = pipeline()
+    backend = fakes.FakeSigner()
+    p.signer = GuardedSigner(backend)
+    assert process(pending, p, 1) is Outcome.PUBLISHED
+    assert backend.signed == [AFTER]
+
+
+def test_frozen_switch_stops_new_attempts(pending: sessionmaker[Session]) -> None:
+    p = pipeline()
+    p.frozen = lambda: True
+    assert process(pending, p, 1) is Outcome.PAUSED
+    assert row(pending).status == "PENDING"
+    with pending() as s:
+        assert s.scalars(select(AttemptRow)).all() == []
