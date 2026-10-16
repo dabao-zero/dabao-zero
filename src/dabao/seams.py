@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Protocol
 
 from dabao.models import Advisory, Component, Finding, Patch
@@ -18,6 +19,8 @@ class DistroAdapter(Protocol):
 
 
 class Scanner(Protocol):
+    name: str
+
     def scan(self, image_digest: str) -> list[Finding]: ...
 
 
@@ -37,3 +40,21 @@ class AdvisorySource(Protocol):
 
 class Clock(Protocol):
     def now(self) -> float: ...
+
+
+@dataclass(frozen=True)
+class SuiteResult:
+    passed: bool
+    details: str = ""
+
+
+class SuiteRunner(Protocol):
+    def run(self, image_digest: str) -> SuiteResult | None:
+        """Run the official-image test suite and smoke tests. None means it could not run."""
+        ...
+
+
+class BuildDiffer(Protocol):
+    def changed_files(self, before_digest: str, after_digest: str) -> list[str] | None:
+        """Files that differ between two builds. None means the comparison could not run."""
+        ...
