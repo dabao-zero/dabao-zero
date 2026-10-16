@@ -36,9 +36,12 @@ patch must derive from an upstream fix the agent actually fetched
 |------------------|---------------|
 | Publish gates with a known-good/known-bad corpus | Debian, Alpine and Wolfi build adapters |
 | Orchestrator: leases, cost caps, no partial publish | Sandboxed agent tool box |
-| Ledger database, migrations, public `/v1` API | Signer service and registry publishing |
-| Ledger web UI (Svelte) | Advisory ingestion from NVD/OSV/trackers |
+| Guarded signer (refuses ungated, revoked or frozen) | Real cosign signing and registry publishing |
+| Ledger database, migrations, public `/v1` API | Live advisory fetchers (NVD, OSV, Debian tracker) |
+| Ledger web UI (Svelte) | Alpine and Wolfi advisory handling |
 | OpenAI-compatible agent client (OpenRouter) | A live end-to-end run |
+| Advisory parsing and ingestion (fixture-tested) | |
+| Operator CLI: freeze, revoke, rerun, status | |
 | Package inventory from OCI images via `regctl` | |
 
 ## Quick start: run the ledger locally with fake demo data
@@ -78,6 +81,14 @@ export DABAO_OPERATOR_TOKEN=change-me          # set before starting the API
 curl -X POST localhost:8000/v1/artifacts/<digest>/revoke \
   -H "Authorization: Bearer $DABAO_OPERATOR_TOKEN" \
   -H 'Content-Type: application/json' -d '{"reason": "bad build"}'
+```
+
+Operator commands (talk to the database in `$DATABASE_URL`):
+
+```bash
+uv run dabao status                              # frozen? counts per status
+uv run dabao freeze --note "investigating"       # stop new attempts and all signing
+uv run dabao rerun DEMO-0003                     # re-queue a failed advisory
 ```
 
 Run the tests: `make check` (lint, types, unit; no Docker or network needed).
