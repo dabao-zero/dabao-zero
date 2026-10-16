@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help sync lint format typecheck test-unit test-integration db-up db-down check frontend-check run hooks
+.PHONY: help sync lint format typecheck test-unit test-integration db-up db-down check frontend-check demo run hooks
 
 help: ## List targets
 	@grep -E '^[a-zA-Z_-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-18s %s\n", $$1, $$2}'
@@ -35,6 +35,10 @@ check: lint typecheck test-unit ## Everything the pre-push hook runs
 
 frontend-check: ## Frontend: svelte-check, vitest, build (needs Node 22)
 	cd frontend && npm ci && npm run check && npm test && npm run build
+
+demo: ## Seed fake demo data into ./dabao.db and start the API
+	uv run python scripts/seed_demo.py
+	$(MAKE) run
 
 run: ## Dev server on the first free port from 8000
 	uv run python scripts/run_dev.py
