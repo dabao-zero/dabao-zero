@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from dabao.models import Advisory, Component, Finding, Patch
+from dabao.seams import SuiteResult
 
 
 @dataclass
@@ -29,6 +30,7 @@ class FakeDistroAdapter:
 @dataclass
 class FakeScanner:
     findings_by_digest: dict[str, list[Finding]] = field(default_factory=dict)
+    name: str = "fake"
 
     def scan(self, image_digest: str) -> list[Finding]:
         return list(self.findings_by_digest.get(image_digest, []))
@@ -65,3 +67,19 @@ class FakeClock:
 
     def advance(self, seconds: float) -> None:
         self.t += seconds
+
+
+@dataclass
+class FakeSuiteRunner:
+    results: dict[str, SuiteResult | None] = field(default_factory=dict)
+
+    def run(self, image_digest: str) -> SuiteResult | None:
+        return self.results.get(image_digest)
+
+
+@dataclass
+class FakeBuildDiffer:
+    diffs: dict[tuple[str, str], list[str] | None] = field(default_factory=dict)
+
+    def changed_files(self, before_digest: str, after_digest: str) -> list[str] | None:
+        return self.diffs.get((before_digest, after_digest))
