@@ -33,7 +33,7 @@ None. Round 1 closed 2026-10-16.
 | Q10 | Delivery model (registry vs PR bot) | ASSUMED | Public OCI registry (GHCR), cosign-signed, SBOM + VEX attached | PLAN §Shape |
 | Q11 | Failure: agent cannot produce a passing patch | ASSUMED | Mark advisory `UNPATCHED` in the ledger with attempt log; never publish a partial fix; surface to customers via VEX `under_investigation` | PLAN §Shape |
 | Q12 | Failure: LLM API down / budget exhausted | ASSUMED | Queue; per-advisory token budget with hard cap; breach sets `NEEDS_HUMAN` and pages the operator | PLAN §Implementation |
-| Q13 | Model/provider | ASSUMED | Anthropic API via Agent SDK behind a thin interface; swappable; model chosen per task class | PLAN §Implementation |
+| Q13 | Model/provider | DECIDED | OpenAI-compatible API via OpenRouter, configured by env; no Anthropic SDK or key | ADR-0008 |
 | Q14 | Advisory sources | ASSUMED | NVD, OSV, distro security trackers (Debian/Ubuntu), upstream git. All free and API-accessible | PLAN §Shape |
 | Q15 | Definition of "patched" | ASSUMED | Grype and Trivy both report clean for that advisory, or an evidence-backed VEX `not_affected`; the original exploit/regression test (where public) fails before and passes after | ADR-0002 |
 | Q16 | Behaviour-preservation check | ASSUMED | Upstream test suite on the patched build, plus per-image smoke tests; reproducible build compared against the unpatched build for unintended file changes | PLAN §Testing |

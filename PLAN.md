@@ -92,7 +92,7 @@ No SLA and no warranty; use at your own risk (ADR-0001).
 - **Agent tools:** fetch advisory, fetch upstream source, apply patch, build, run tests, submit. Structured JSON; a gate failure is a nonzero exit (Q9).
 - **Patch record:** every `Patch` carries `source` (`upstream_derived` | `original`), links to the upstream commit or advisory it came from, and the diff. Only `upstream_derived` can pass the gate today (ADR-0003).
 - **Failure:** no passing patch means `UNPATCHED` in the ledger with the attempt log and VEX `under_investigation`; never a partial publish (Q11). Token budget per advisory; breach gives `NEEDS_HUMAN` (Q12).
-- **Model:** Anthropic API through a thin interface, so providers are swappable (Q13).
+- **Model:** any OpenAI-compatible endpoint (OpenRouter by default) through a thin `AgentRunner` client, configured by environment (ADR-0008, Q13).
 - **Hosting:** orchestrator as a service, builds as ephemeral Kubernetes jobs, managed Postgres, GHCR for images (Q26, Q36).
 - **Secrets:** signing identity and API keys exist only in the orchestrator and signer, never in sandboxes or logs (Q20).
 - **Versioning:** ledger API under `/v1`; schema migrations by a standard tool (Q32).
@@ -108,7 +108,7 @@ Success targets (Q27): median advisory-to-published time under 24h for upstream-
 | ID | Assumed | Cost if wrong |
 |----|---------|---------------|
 | Q1 | Free self-serve users, no sales-led customer | Low: pricing is deferred anyway |
-| Q13 | Anthropic API as model provider | Low: behind an interface |
+| Q13 | OpenAI-compatible API via OpenRouter (decided, ADR-0008) | Low: behind an interface |
 | Q15 | "Patched" = Grype and Trivy clean, or evidence-backed VEX `not_affected` | Medium: scanners disagree and false-clears are possible |
 | Q16 | Upstream/official-image test suite plus smoke tests prove drop-in behaviour | High for V1/V3: weak tests let a broken patch through |
 | Q26 | Kubernetes jobs for builds | Medium: rework of S4 |
