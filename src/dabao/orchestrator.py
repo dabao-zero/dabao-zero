@@ -6,6 +6,7 @@ runs the deterministic gates, and only then publishes. Agents propose; gates dec
 
 from __future__ import annotations
 
+import json
 import logging
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
@@ -169,6 +170,10 @@ def _attempt(session: Session, p: Pipeline, affected_id: int) -> Outcome:
             GateInput(advisory, patch, before, after, p.scanners, p.suite_runner, p.differ),
             p.gates,
         )
+        attempt.verdict = json.dumps(
+            [{"name": r.name, "passed": r.passed, "reason": r.reason} for r in verdict.results]
+        )
+        session.commit()
         if not verdict.passed:
             _fail(
                 session,

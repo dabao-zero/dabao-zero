@@ -18,27 +18,52 @@ def test_healthz(seeded: sessionmaker[Session], clock: FakeClock) -> None:
     assert client(seeded, clock).get("/healthz").json() == {"status": "ok"}
 
 
-def test_images_summary_includes_median_time_to_patch(
+def test_images_summary_has_catalog_fields(seeded: sessionmaker[Session], clock: FakeClock) -> None:
+    (img,) = client(seeded, clock).get("/v1/images").json()
+    assert img["name"] == "nginx"
+    assert (img["open"], img["fixed"], img["total"]) == (1, 1, 2)
+    assert (img["patched"], img["unpatched"], img["pending"], img["needs_human"]) == (1, 1, 0, 0)
+    assert img["bases"] == ["debian"]
+    assert img["latest_tag"] == "1.22.0-dabao1" and img["updated_at"] == 400.0
+    assert img["median_time_to_patch_s"] == 300.0
+    assert img["description"] == ""  # no catalog row yet: empty, not an error
+
+
+def test_image_detail_has_tags_and_advisories_and_unknown_is_404(
     seeded: sessionmaker[Session], clock: FakeClock
 ) -> None:
-    (img,) = client(seeded, clock).get("/v1/images").json()
-    assert img == {
-        "name": "nginx",
-        "total": 2,
-        "patched": 1,
-        "unpatched": 1,
-        "pending": 0,
-        "median_time_to_patch_s": 300.0,
-    }
-
-
-def test_image_detail_and_unknown_image(seeded: sessionmaker[Session], clock: FakeClock) -> None:
     c = client(seeded, clock)
-    assert [r["advisory_id"] for r in c.get("/v1/images/nginx").json()] == [
-        "CVE-2024-0001",
-        "CVE-2024-0002",
-    ]
+    body = c.get("/v1/images/nginx").json()
+    assert [a["advisory_id"] for a in body["advisories"]] == ["CVE-2024-0001", "CVE-2024-0002"]
+    (tag,) = body["tags"]
+    assert (tag["tag"], tag["status"], tag["open_cves"], tag["fixed_cves"]) == (
+        "1.22.0-dabao1",
+        "PUBLISHED",
+        1,
+        1,
+    )
     assert c.get("/v1/images/nope").status_code == 404
+
+
+def test_stats_and_runs(seeded: sessionmaker[Session], clock: FakeClock) -> None:
+    c = client(seeded, clock)
+    assert c.get("/v1/stats").json() == {
+        "attempts": 1,
+        "fixes": 1,
+        "median_time_to_fix_s": 300.0,
+        "median_cost_per_fix_usd": 0.5,
+        "failed_spend_usd": 0.0,
+        "total_spend_usd": 0.5,
+    }
+    (run,) = c.get("/v1/runs").json()
+    assert (run["advisory_id"], run["image"], run["outcome"], run["duration_s"]) == (
+        "CVE-2024-0001",
+        "nginx",
+        "SUCCEEDED",
+        280.0,
+    )
+    assert c.get("/v1/runs", params={"limit": 0}).status_code == 422
+    assert c.get("/v1/runs", params={"limit": 101}).status_code == 422
 
 
 def test_advisory_list_filters_by_status(seeded: sessionmaker[Session], clock: FakeClock) -> None:
@@ -105,3 +130,22 @@ def test_status_reports_freeze_state(seeded: sessionmaker[Session], clock: FakeC
     with seeded() as s:
         operator.freeze(s, "incident", 1.0)
     assert c.get("/v1/status").json() == {"frozen": True}
+
+
+def test_advisory_detail_includes_gates_and_ignores_malformed_entries(
+    seeded: sessionmaker[Session], clock: FakeClock
+) -> None:
+    import json
+
+    from dabao.orm import AttemptRow
+
+    with seeded() as s:
+        att = s.get(AttemptRow, 1)
+        assert att is not None
+        att.verdict = json.dumps(
+            [{"name": "tests_pass", "passed": True, "reason": "ok"}, {"name": "broken"}]
+        )
+        s.commit()
+    body = client(seeded, clock).get("/v1/advisories/CVE-2024-0001").json()
+    gates = body["affected"][0]["attempts"][0]["gates"]
+    assert gates == [{"name": "tests_pass", "passed": True, "reason": "ok"}]
