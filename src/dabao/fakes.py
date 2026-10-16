@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from dabao.models import Advisory, Component, Finding, Patch
-from dabao.seams import SuiteResult
+from dabao.seams import AgentResult, SuiteResult
 
 
 @dataclass
@@ -13,9 +13,14 @@ class FakeAgentRunner:
     """Replays recorded patches keyed by (advisory id, package)."""
 
     recorded: dict[tuple[str, str], Patch] = field(default_factory=dict)
+    cost_usd: float = 0.0
+    raises: Exception | None = None
 
-    def propose_patch(self, advisory: Advisory, component: Component) -> Patch | None:
-        return self.recorded.get((advisory.id, component.package))
+    def propose_patch(self, advisory: Advisory, component: Component) -> AgentResult:
+        if self.raises is not None:
+            raise self.raises
+        patch = self.recorded.get((advisory.id, component.package))
+        return AgentResult(patch=patch, tokens_in=100, tokens_out=50, cost_usd=self.cost_usd)
 
 
 @dataclass
