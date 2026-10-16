@@ -1,19 +1,18 @@
-import { describe, expect, it } from "vitest";
-import { ApiError, getJson } from "./api";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { api, ApiError } from "./api";
 
-function fakeFetch(status: number, body: unknown): typeof fetch {
-  return (async () =>
-    new Response(JSON.stringify(body), { status, statusText: status === 404 ? "Not Found" : "OK" })) as typeof fetch;
-}
+afterEach(() => vi.unstubAllGlobals());
 
-describe("getJson", () => {
-  it("returns parsed JSON on success", async () => {
-    expect(await getJson("/v1/images", fakeFetch(200, [{ name: "nginx" }]))).toEqual([{ name: "nginx" }]);
+describe("api", () => {
+  it("requests the runs endpoint with a limit", async () => {
+    const f = vi.fn().mockResolvedValue(new Response("[]"));
+    vi.stubGlobal("fetch", f);
+    await api.runs(5);
+    expect(String(f.mock.calls[0][0])).toContain("/v1/runs?limit=5");
   });
-  it("throws ApiError with the status on failure", async () => {
-    await expect(getJson("/v1/images/x", fakeFetch(404, {}))).rejects.toMatchObject({
-      status: 404,
-    });
-    await expect(getJson("/v1/images/x", fakeFetch(404, {}))).rejects.toBeInstanceOf(ApiError);
+  it("throws ApiError carrying the status", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("no", { status: 404 })));
+    await expect(api.image("x")).rejects.toMatchObject({ status: 404 });
+    await expect(api.image("x")).rejects.toBeInstanceOf(ApiError);
   });
 });
