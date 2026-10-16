@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from dabao.models import AdvisoryStatus
-from dabao.orm import AdvisoryRow, AffectedRow, ArtifactRow
+from dabao.orm import AdvisoryRow, AffectedRow, ArtifactRow, FlagRow
 
 
 def list_advisories(session: Session, status: str | None = None) -> list[AffectedRow]:
@@ -72,3 +72,17 @@ def revoke_artifact(session: Session, digest: str, reason: str, now: float) -> A
         art.revoked_reason = reason
         session.commit()
     return art
+
+
+def get_flag(session: Session, name: str) -> bool:
+    row = session.get(FlagRow, name)
+    return row is not None and row.value == "1"
+
+
+def set_flag(session: Session, name: str, on: bool, note: str, now: float) -> None:
+    row = session.get(FlagRow, name)
+    if row is None:
+        session.add(FlagRow(name=name, value="1" if on else "0", note=note, updated_at=now))
+    else:
+        row.value, row.note, row.updated_at = "1" if on else "0", note, now
+    session.commit()
