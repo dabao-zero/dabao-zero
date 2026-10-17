@@ -1,7 +1,9 @@
 # dabao-zero: Board tasks (staging file for Pandan)
 
-Pandan was not reachable from this session (no `pandan` CLI, no token, no MCP tools), so the
-backlog lives here first. Format follows the pandan skill's epics-and-stories guide. Refs are
+The backlog now lives on the Pandan board `DAB` (board 37, filed 2026-10-17, with epic E7 for the
+VPS agent host added; spike note in `docs/spikes/vps-agent-host.md`). The board is the source of
+truth from here; this file is the original staging text and is not kept in sync.
+Original note: Pandan was not reachable when this was written, so the backlog lived here first. Format follows the pandan skill's epics-and-stories guide. Refs are
 temporary (`E1`, `T1.2`); dependencies are listed as `Blocked by` so they can be filed as
 `pandan dep add` edges. Points are 1-5. Once access exists: create the board, file epics first,
 then stories with `--epic`, then dependencies. See "Filing" at the bottom.

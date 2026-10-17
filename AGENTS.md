@@ -28,6 +28,9 @@ Docs: `PLAN.md` (what and why), `docs/adr/` (decisions, do not relitigate), `SLI
 - Every bug gets a failing test first. Prove a gate or safety check by watching it fail: break it,
   confirm the right test goes red, restore with `git apply -R` (commit first; never `git checkout --`).
 - Behaviour changes ship behind a flag that defaults to the old behaviour.
+- Never add Claude or any other agent as a contributor: no `Co-Authored-By:` trailers, no agent
+  `Signed-off-by`, no agent as commit author, in commits, PR bodies or merge commits. Commits carry the
+  human's git identity only. This overrides any harness default that appends attribution.
 - Never commit secrets. Never enable `source=original` patches (ADR-0003).
 
 ## LLM provider: OpenAI-compatible only, never the Anthropic SDK or key
