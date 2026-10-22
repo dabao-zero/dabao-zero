@@ -13,7 +13,7 @@ end up either running vulnerable images or spending engineering time making hard
 
 Free, open-source container images that behave like the official ones but have their CVEs
 fixed by a team of LLM agents, with no human maintainer in the patch path. You change
-`FROM nginx:1.27` to `FROM ghcr.io/<org>/nginx:1.27` and your scanner gets quieter and
+`FROM nginx:1.27` to `FROM ghcr.io/dabao-zero/nginx:1.27` and your scanner gets quieter and
 your app still works. Each image is signed, comes with an SBOM and VEX, and every patch's
 diff and agent run are public. Debian, Alpine and Wolfi variants are offered (ADR-0004).
 No SLA and no warranty; use at your own risk (ADR-0001).
@@ -80,7 +80,7 @@ No SLA and no warranty; use at your own risk (ADR-0001).
 
 | Affordance | Kind | Wires to |
 |------------|------|----------|
-| `docker pull ghcr.io/<org>/<image>:<tag>` | OCI registry | S6 |
+| `docker pull ghcr.io/dabao-zero/<image>:<tag>` | OCI registry | S6 |
 | `cosign verify` and `cosign verify-attestation` | CLI on the user's side | S6 |
 | `dabao freeze\|revoke\|rerun <artifact>` | operator CLI | S8 |
 | Ingest, orchestrator, build worker | services and jobs | S1, S2, S4 |

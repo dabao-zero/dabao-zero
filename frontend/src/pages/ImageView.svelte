@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { ImageDetail } from "../lib/api";
-  import { pullCommand, REGISTRY } from "../lib/config";
+  import { pullCommand, REGISTRY, REPO_URL } from "../lib/config";
   import {
     fixHref,
     formatDate,
@@ -169,7 +169,7 @@
             <div>
               <h2 class="ts-title-medium" style="margin-bottom: 8px;">Verify the signature</h2>
               <pre class="code-block">{`cosign verify ${ref} \\
-  --certificate-identity-regexp 'https://github.com/leejianrong/dabao-zero/.*' \\
+  --certificate-identity-regexp '${REPO_URL}/.*' \\
   --certificate-oidc-issuer https://token.actions.githubusercontent.com`}</pre>
             </div>
             <div>

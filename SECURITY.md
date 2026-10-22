@@ -7,7 +7,7 @@ with no SLA and no warranty; reports are handled on a best-effort basis.
 ## Reporting
 
 Please report vulnerabilities privately through GitHub's
-[private vulnerability reporting](https://github.com/leejianrong/dabao-zero/security/advisories/new),
+[private vulnerability reporting](https://github.com/dabao-zero/dabao-zero/security/advisories/new),
 not in a public issue.
 
 Particularly interested in anything that could let untrusted input (an advisory, an upstream
