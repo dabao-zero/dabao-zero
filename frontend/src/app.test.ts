@@ -32,7 +32,37 @@ describe("catalog", () => {
     cleanup();
     render(CatalogView, { images });
     await fireEvent.input(screen.getByPlaceholderText(/search images/i), { target: { value: "zzz" } });
-    expect(screen.getByText("Nothing matches that search")).toBeTruthy();
+    expect(screen.getByText("Nothing matches those filters")).toBeTruthy();
+  });
+  it("filters by status and keeps the choice in the URL", async () => {
+    render(CatalogView, { images });
+    await fireEvent.click(screen.getByRole("button", { name: /open cves/i }));
+    expect(screen.getByText("2 images")).toBeTruthy();
+    expect(window.location.hash).toContain("status=open");
+    await fireEvent.click(screen.getByRole("button", { name: /all fixed/i }));
+    expect(screen.getByText("1 image")).toBeTruthy();
+    expect(window.location.hash).toContain("status=fixed");
+  });
+  it("sorts by open CVEs and remembers it", async () => {
+    render(CatalogView, { images });
+    await fireEvent.change(screen.getByLabelText(/sort by/i), { target: { value: "open" } });
+    const names = screen.getAllByRole("listitem").map((li) => li.textContent ?? "");
+    expect(names[0]).toContain("redis");
+    expect(window.location.hash).toContain("sort=open");
+  });
+  it("applies filters already in the URL on load", () => {
+    window.location.hash = "#/images?base=alpine&status=open";
+    render(CatalogView, { images });
+    expect(screen.getByText("1 image")).toBeTruthy();
+  });
+  it("names the active filters when nothing matches", () => {
+    window.location.hash = "#/images?base=debian&status=fixed&q=redis";
+    render(CatalogView, { images });
+    const msg = screen.getByText("Nothing matches those filters");
+    expect(msg).toBeTruthy();
+    expect(screen.getByText(/Search: redis/)).toBeTruthy();
+    expect(screen.getByText(/Base: debian/)).toBeTruthy();
+    expect(screen.getByText(/Status: all fixed/i)).toBeTruthy();
   });
   it("offers a pull command under the registry", () => {
     render(CatalogView, { images });
@@ -132,6 +162,16 @@ describe("app shell", () => {
     window.location.hash = "#/about";
     window.dispatchEvent(new HashChangeEvent("hashchange"));
     await vi.waitFor(() => expect(document.title).toBe("About · dabao-zero"));
+  });
+  it("resets the catalog filters when the Images link is followed", async () => {
+    // a fresh Response per call: a body can only be read once, and the page refetches on remount
+    vi.stubGlobal("fetch", vi.fn().mockImplementation(async () => new Response(JSON.stringify(images))));
+    window.location.hash = "#/images?status=open";
+    render(App);
+    await vi.waitFor(() => expect(screen.getByText("2 images")).toBeTruthy());
+    window.location.hash = "#/images";
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
+    await vi.waitFor(() => expect(screen.getByText("3 images")).toBeTruthy());
   });
   it("toggles the theme and persists it", async () => {
     render(App);

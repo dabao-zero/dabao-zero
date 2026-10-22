@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { ImageSummary } from "../lib/api";
+  import { catalogHref, parseCatalogQuery, type CatalogSort, type CatalogStatus } from "../lib/format";
   import { pullCommand } from "../lib/config";
   import CopyCode from "../components/CopyCode.svelte";
   import Icon from "../components/Icon.svelte";
@@ -8,19 +9,49 @@
 
   let { images }: { images: ImageSummary[] } = $props();
 
-  let q = $state("");
-  let base = $state("all");
+  const initial = parseCatalogQuery(window.location.hash);
+  let q = $state(initial.q);
+  let base = $state(initial.base);
+  let status = $state<CatalogStatus>(initial.status);
+  let sort = $state<CatalogSort>(initial.sort);
+
+  // Keep the choices in the URL so a reload or a shared link shows the same view.
+  $effect(() => {
+    const href = catalogHref({ q, base, status, sort });
+    if (window.location.hash !== href) history.replaceState(null, "", href);
+  });
 
   const bases = $derived([...new Set(images.flatMap((i) => i.bases))].sort());
   const shown = $derived(
-    images.filter(
-      (i) =>
-        (base === "all" || i.bases.includes(base)) &&
-        (q.trim() === "" ||
-          i.name.toLowerCase().includes(q.trim().toLowerCase()) ||
-          i.description.toLowerCase().includes(q.trim().toLowerCase())),
-    ),
+    images
+      .filter(
+        (i) =>
+          (base === "all" || i.bases.includes(base)) &&
+          (status === "all" || (status === "open" ? i.open > 0 : i.open === 0)) &&
+          (q.trim() === "" ||
+            i.name.toLowerCase().includes(q.trim().toLowerCase()) ||
+            i.description.toLowerCase().includes(q.trim().toLowerCase())),
+      )
+      .sort((a, b) =>
+        sort === "open"
+          ? b.open - a.open || a.name.localeCompare(b.name)
+          : sort === "updated"
+            ? (b.updated_at ?? -1) - (a.updated_at ?? -1) || a.name.localeCompare(b.name)
+            : a.name.localeCompare(b.name),
+      ),
   );
+  const active = $derived(
+    [
+      q.trim() !== "" ? `Search: ${q.trim()}` : null,
+      base !== "all" ? `Base: ${base}` : null,
+      status !== "all" ? `Status: ${status === "open" ? "open CVEs" : "all fixed"}` : null,
+    ].filter((x): x is string => x !== null),
+  );
+  function clear() {
+    q = "";
+    base = "all";
+    status = "all";
+  }
   const example = $derived(images.find((i) => i.latest_tag !== null));
   const title = (b: string) => b.charAt(0).toUpperCase() + b.slice(1);
 </script>
@@ -52,6 +83,21 @@
       <h2 id="images-h" class="ts-headline-small">Images</h2>
       <span class="ts-body-medium muted" aria-live="polite">{shown.length} {shown.length === 1 ? "image" : "images"}</span>
     </div>
+    <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px;">
+    <div role="group" aria-label="Filter by status" style="display: flex; flex-wrap: wrap; gap: 8px;">
+      <button type="button" class="chip sl" aria-pressed={status === "all"} onclick={() => (status = "all")}><span>Any status</span></button>
+      <button type="button" class="chip sl" aria-pressed={status === "open"} onclick={() => (status = "open")}><span>Open CVEs</span></button>
+      <button type="button" class="chip sl" aria-pressed={status === "fixed"} onclick={() => (status = "fixed")}><span>All fixed</span></button>
+    </div>
+    <label class="ts-body-medium" style="display: inline-flex; align-items: center; gap: 8px;">
+      <span class="muted">Sort by</span>
+      <select bind:value={sort} style="height: 36px; padding: 0 8px; border-radius: var(--md-sys-shape-corner-small); border: 1px solid var(--md-sys-color-outline); background: var(--md-sys-color-surface); color: inherit; font: inherit;">
+        <option value="name">Name</option>
+        <option value="open">Most open CVEs</option>
+        <option value="updated">Recently updated</option>
+      </select>
+    </label>
+    </div>
     {#if bases.length > 0}
       <div role="group" aria-label="Filter by base" style="display: flex; flex-wrap: wrap; gap: 8px;">
         <button type="button" class="chip sl" aria-pressed={base === "all"} onclick={() => (base = "all")}>
@@ -78,8 +124,9 @@
           <div class="ts-title-medium">No images yet</div>
           <p class="ts-body-medium muted" style="margin-top: 4px;">Once the first image is published it will show up here.</p>
         {:else}
-          <div class="ts-title-medium">Nothing matches that search</div>
-          <p class="ts-body-medium muted" style="margin-top: 4px;">Try a shorter name, or switch the base filter back to All.</p>
+          <div class="ts-title-medium">Nothing matches those filters</div>
+          <p class="ts-body-medium muted" style="margin-top: 4px;">{active.join(" · ")}</p>
+          <button type="button" class="btn btn-tonal sl" style="margin-top: 12px;" onclick={clear}>Clear filters</button>
         {/if}
       </div>
     </div>
