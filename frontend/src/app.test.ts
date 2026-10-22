@@ -164,6 +164,8 @@ describe("app shell", () => {
     await vi.waitFor(() => expect(document.title).toBe("About · dabao-zero"));
   });
   it("resets the catalog filters when the Images link is followed", async () => {
+    // a fresh Response per call: a body can only be read once, and the page refetches on remount
+    vi.stubGlobal("fetch", vi.fn().mockImplementation(async () => new Response(JSON.stringify(images))));
     window.location.hash = "#/images?status=open";
     render(App);
     await vi.waitFor(() => expect(screen.getByText("2 images")).toBeTruthy());
