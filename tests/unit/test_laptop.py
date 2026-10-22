@@ -10,9 +10,11 @@ import pytest
 from dabao.bundle import load_bundle
 from dabao.laptop import (
     CodexRun,
+    ExecCodexRunner,
     LaptopAttemptError,
     build_prompt,
     codex_command,
+    default_scratch_root,
     run_attempt,
     sandbox_env,
 )
@@ -72,7 +74,7 @@ def auth(tmp_path: Path) -> Path:
 
 
 def attempt(
-    codex: FakeCodex, source: Path, auth: Path, tmp_path: Path, **kw: object
+    codex: FakeCodex, source: Path, auth: Path, tmp_path: Path, log_path: Path | None = None
 ) -> tuple[Path, Path]:
     out = tmp_path / "bundle.json"
     work = tmp_path / "work"
@@ -88,7 +90,7 @@ def attempt(
         scratch_root=work,
         model="gpt-5",
         now=5.0,
-        **kw,
+        log_path=log_path,
     )
     return out, work
 
@@ -157,6 +159,16 @@ def test_no_change_writes_no_bundle(source: Path, auth: Path, tmp_path: Path) ->
     assert not (tmp_path / "bundle.json").exists()
 
 
+def test_no_change_error_carries_what_codex_said_and_the_log_is_kept(
+    source: Path, auth: Path, tmp_path: Path
+) -> None:
+    log = tmp_path / "codex.log"
+    codex = FakeCodex(edit=False, final="could not reach the upstream repository")
+    with pytest.raises(LaptopAttemptError, match="could not reach the upstream repository"):
+        attempt(codex, source, auth, tmp_path, log_path=log)
+    assert log.read_text() == "codex transcript"
+
+
 def test_bad_final_message_writes_no_bundle(source: Path, auth: Path, tmp_path: Path) -> None:
     with pytest.raises(LaptopAttemptError, match="final message"):
         attempt(FakeCodex(final="not json"), source, auth, tmp_path)
@@ -193,3 +205,30 @@ def test_real_environment_is_never_mutated(source: Path, auth: Path, tmp_path: P
     before = dict(os.environ)
     attempt(FakeCodex(), source, auth, tmp_path)
     assert dict(os.environ) == before
+
+
+def test_scratch_is_not_under_the_system_temp_dir(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Codex refuses to create its Linux sandbox helper under /tmp, then every command fails
+    # (found by running it for real). So scratch space lives under the user cache directory.
+    import tempfile
+
+    monkeypatch.delenv("XDG_CACHE_HOME", raising=False)
+    root = default_scratch_root()
+    assert not str(root).startswith(tempfile.gettempdir())
+    monkeypatch.setenv("XDG_CACHE_HOME", "/var/cache/me")
+    assert default_scratch_root() == Path("/var/cache/me/dabao-attempts")
+
+
+def test_a_hung_codex_is_stopped_and_reported(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import subprocess
+
+    def hang(*a: object, **k: object) -> None:
+        raise subprocess.TimeoutExpired(cmd="codex", timeout=k["timeout"])  # type: ignore[arg-type]
+
+    monkeypatch.setattr(subprocess, "run", hang)
+    work = tmp_path / "w"
+    work.mkdir()
+    with pytest.raises(LaptopAttemptError, match="timed out after 5s"):
+        ExecCodexRunner(timeout_s=5).run("p", work, {})
