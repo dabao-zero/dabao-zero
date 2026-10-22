@@ -101,9 +101,9 @@ def test_cosign_signs_repository_at_digest_with_keyless_flags() -> None:
         calls.append(args)
         return done()
 
-    signer = CosignSigner("ghcr.io/leejianrong/nginx", runner=runner)
-    assert signer.sign(DIGEST, good_verdict()) == f"ghcr.io/leejianrong/nginx@{DIGEST}"
-    assert calls == [["cosign", "sign", "--yes", f"ghcr.io/leejianrong/nginx@{DIGEST}"]]
+    signer = CosignSigner("ghcr.io/dabao-zero/nginx", runner=runner)
+    assert signer.sign(DIGEST, good_verdict()) == f"ghcr.io/dabao-zero/nginx@{DIGEST}"
+    assert calls == [["cosign", "sign", "--yes", f"ghcr.io/dabao-zero/nginx@{DIGEST}"]]
     assert not any("key" in part for part in calls[0])  # keyless: no key material
 
 

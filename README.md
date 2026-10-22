@@ -50,7 +50,7 @@ Needs [uv](https://docs.astral.sh/uv/) and Node 22. Advisory ids in the demo are
 nothing here is a real vulnerability.
 
 ```bash
-git clone https://github.com/leejianrong/dabao-zero && cd dabao-zero
+git clone https://github.com/dabao-zero/dabao-zero && cd dabao-zero
 make sync        # backend dependencies
 make demo        # seeds ./dabao.db, starts the API, prints its URL (first free port from 8000)
 ```
