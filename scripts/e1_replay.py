@@ -1,10 +1,18 @@
-"""Replay one E1 bundle through the live Debian pipeline and print what the gates said.
+"""Replay one E1 patch through the live Debian pipeline and print what the gates said.
 
 Needs Docker with a docker-container buildx builder, network, and `trivy` and `grype` on PATH.
 Builds the patched image, scans before and after, runs the smoke commands and records the attempt
 in a SQLite ledger. Nothing is published: the registry and signer are fakes.
 
+The patch comes from a manual Codex bundle (ADR-0009):
+
     uv run python scripts/e1_replay.py BUNDLE.json --work DIR --db ledger.db --builder NAME
+
+or from the unattended LLM agent (DAB-10; needs LLM_API_KEY, LLM_MODEL and optionally
+LLM_BASE_URL, see ADR-0008), which looks things up through the allow-listed toolbox:
+
+    uv run python scripts/e1_replay.py --agent --advisory CVE-2022-48303 --package tar \
+        --version 1.34+dfsg-1.2 --source-dir ./tar-src --work DIR --db ledger.db --builder NAME
 """
 
 from __future__ import annotations
@@ -18,14 +26,18 @@ from pathlib import Path
 from sqlalchemy import select
 
 from dabao import fakes
+from dabao.agent import LLMAgentRunner
 from dabao.bundle import load_bundle
 from dabao.db import make_engine, make_session_factory
 from dabao.debian import DebianAdapter, DebianBase
 from dabao.gates import GateConfig
 from dabao.live import GrypeScanner, ImageSource, OciDiffer, SmokeSuiteRunner, TrivyScanner
+from dabao.llm import ChatClient, ConfigError, LLMConfig
 from dabao.manual import import_bundle
-from dabao.orchestrator import Limits, Pipeline
+from dabao.models import Component
+from dabao.orchestrator import Limits, Pipeline, process
 from dabao.orm import AdvisoryRow, AffectedRow, AttemptRow, Base
+from dabao.toolbox import SandboxToolBox
 
 BASE = DebianBase(
     image="debian:bookworm-20240110-slim",
@@ -47,23 +59,37 @@ class Clock:
 
 def main() -> int:
     p = argparse.ArgumentParser()
-    p.add_argument("bundle", type=Path)
+    p.add_argument("bundle", type=Path, nargs="?", help="a candidate bundle (omit with --agent)")
+    p.add_argument("--agent", action="store_true", help="use the unattended LLM agent instead")
+    p.add_argument("--advisory")
+    p.add_argument("--package")
+    p.add_argument("--version")
+    p.add_argument("--source-dir", type=Path, help="unpacked source the agent may read")
     p.add_argument("--work", type=Path, required=True)
     p.add_argument("--db", type=Path, required=True)
     p.add_argument("--builder", default="dabao-builder")
     args = p.parse_args()
 
-    bundle = load_bundle(args.bundle.read_text())
-    comp = bundle.patch.component
+    if args.agent:
+        if not (args.advisory and args.package and args.version and args.source_dir):
+            p.error("--agent needs --advisory, --package, --version and --source-dir")
+        advisory_id = args.advisory
+        comp = Component(stream="debian", package=args.package, version=args.version)
+        bundle = None
+    else:
+        if args.bundle is None:
+            p.error("give a bundle, or use --agent")
+        bundle = load_bundle(args.bundle.read_text())
+        advisory_id, comp = bundle.patch.advisory_id, bundle.patch.component
     engine = make_engine(f"sqlite+pysqlite:///{args.db}")
     Base.metadata.create_all(engine)
     factory = make_session_factory(engine)
     with factory() as s:
-        if s.get(AdvisoryRow, bundle.patch.advisory_id) is None:
-            s.add(AdvisoryRow(id=bundle.patch.advisory_id))
+        if s.get(AdvisoryRow, advisory_id) is None:
+            s.add(AdvisoryRow(id=advisory_id))
         s.add(
             AffectedRow(
-                advisory_id=bundle.patch.advisory_id,
+                advisory_id=advisory_id,
                 stream=comp.stream,
                 image="debian",
                 package=comp.package,
@@ -91,7 +117,20 @@ def main() -> int:
         limits=Limits(),
     )
     started = time.time()
-    outcomes = import_bundle(factory, replace(pipeline), bundle, enabled=True)
+    if bundle is not None:
+        outcomes = import_bundle(factory, replace(pipeline), bundle, enabled=True)
+    else:
+        try:
+            config = LLMConfig.from_env()
+        except ConfigError as exc:
+            print(f"cannot start the agent: {exc} (see ADR-0008)")
+            return 2
+        agent = LLMAgentRunner(ChatClient(config), SandboxToolBox(args.source_dir))
+        with factory() as s:
+            row = s.scalars(select(AffectedRow).order_by(AffectedRow.id.desc())).first()
+            assert row is not None
+            affected_id = row.id
+        outcomes = [process(factory, replace(pipeline, agent=agent), affected_id)]
     with factory() as s:
         attempt = s.scalars(select(AttemptRow).order_by(AttemptRow.id.desc())).first()
         verdict = json.loads(attempt.verdict) if attempt and attempt.verdict else None
