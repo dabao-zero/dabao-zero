@@ -80,7 +80,7 @@
     <div class="table-scroll">
       <table class="dtable" aria-label="Recent runs">
         <thead>
-          <tr><th>Advisory</th><th>Image</th><th>Package</th><th>Outcome</th><th>Started</th><th>Took</th><th>Cost</th></tr>
+          <tr><th>Advisory</th><th>Image</th><th>Package</th><th>Outcome</th><th>Run by</th><th>Started</th><th>Took</th><th>Cost</th></tr>
         </thead>
         <tbody>
           {#each runs as r (r.attempt_id)}
@@ -89,6 +89,7 @@
               <td>{r.image}</td>
               <td class="mono">{r.package}</td>
               <td>{r.outcome}</td>
+              <td>{r.runner === "manual_codex" ? "Agent, started by the maintainer" : "Agent"}</td>
               <td>{formatDateTime(r.started_at)}</td>
               <td class="num">{formatDuration(r.duration_s)}</td>
               <td class="num">{formatUsd(r.cost_usd)}</td>

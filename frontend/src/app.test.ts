@@ -62,6 +62,14 @@ describe("fix page", () => {
     expect(screen.getByRole("heading", { name: "DEMO-1" })).toBeTruthy();
     expect(screen.getByText("+new")).toBeTruthy();
     expect(screen.getByText("1 failed")).toBeTruthy();
+    expect(screen.queryByText(/started by the maintainer/i)).toBeNull();
+  });
+
+  it("says when the maintainer started the run", () => {
+    const manual = structuredClone(advisory);
+    manual.affected[0].attempts[0].runner = "manual_codex";
+    render(FixView, { advisory: manual, rowId: 1 });
+    expect(screen.getByText(/agent-patched, run started by the maintainer/i)).toBeTruthy();
   });
 });
 
@@ -69,6 +77,7 @@ describe("about", () => {
   it("shows stats, runs and the disclaimer", () => {
     render(AboutView, { stats, runs });
     expect(screen.getByText("$0.31")).toBeTruthy();
+    expect(screen.getByText("Agent")).toBeTruthy();
     expect(screen.getByRole("link", { name: "DEMO-1" })).toBeTruthy();
     expect(screen.getByText(/no warranty and no SLA/)).toBeTruthy();
   });

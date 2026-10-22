@@ -37,6 +37,9 @@
     <StatusPill kind={fixed ? "good" : row.status === "NEEDS_HUMAN" ? "human" : row.status === "PENDING" ? "quiet" : "bad"} label={fixed ? "Fixed" : row.status === "NEEDS_HUMAN" ? "Needs a human" : row.status === "PENDING" ? "Queued" : "Open"} icon={fixed} />
   </div>
   <p class="ts-body-large muted" style="margin-top: 8px; max-width: 64ch;">{intro}</p>
+  {#if attempt?.runner === "manual_codex"}
+    <p class="ts-body-medium muted" style="margin-top: 4px;">Agent-patched, run started by the maintainer. The same automatic checks decided it.</p>
+  {/if}
 
   <div style="display: flex; flex-wrap: wrap; gap: 40px; align-items: flex-start; margin-top: 32px;">
     <section style="flex: 0 1 400px; min-width: 0;" aria-label="Receipt">
