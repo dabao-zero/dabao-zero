@@ -40,6 +40,7 @@ class AttemptOut(BaseModel):
     tokens_in: int
     tokens_out: int
     cost_usd: float
+    agent_seconds: float | None
     patch_source: str | None
     patch_upstream_ref: str | None
     patch_diff: str | None
@@ -114,6 +115,7 @@ class StatsOut(BaseModel):
 class RunOut(BaseModel):
     attempt_id: int
     runner: str
+    agent_seconds: float | None
     advisory_id: str
     image: str
     package: str
@@ -162,6 +164,7 @@ def _attempt(a: AttemptRow) -> AttemptOut:
         tokens_in=a.tokens_in,
         tokens_out=a.tokens_out,
         cost_usd=a.cost_usd,
+        agent_seconds=a.agent_seconds,
         patch_source=p.source if p else None,
         patch_upstream_ref=p.upstream_ref if p else None,
         patch_diff=p.diff if p else None,

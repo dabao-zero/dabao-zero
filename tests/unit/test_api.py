@@ -167,3 +167,18 @@ def test_attempts_and_runs_say_who_ran_them(
     assert c.get("/v1/runs").json()[0]["runner"] == "manual_codex"
     body = c.get("/v1/advisories/CVE-2024-0001").json()
     assert body["affected"][0]["attempts"][0]["runner"] == "manual_codex"
+
+
+def test_attempts_and_runs_report_agent_time(
+    seeded: sessionmaker[Session], clock: FakeClock
+) -> None:
+    from dabao.orm import AttemptRow
+
+    c = client(seeded, clock)
+    assert c.get("/v1/runs").json()[0]["agent_seconds"] is None  # old rows have no figure
+    with seeded() as s:
+        s.get(AttemptRow, 1).agent_seconds = 378.0  # type: ignore[union-attr]
+        s.commit()
+    assert c.get("/v1/runs").json()[0]["agent_seconds"] == 378.0
+    body = c.get("/v1/advisories/CVE-2024-0001").json()
+    assert body["affected"][0]["attempts"][0]["agent_seconds"] == 378.0

@@ -86,3 +86,36 @@ def test_0004_marks_existing_attempts_as_agent_runs(tmp_path: Path) -> None:
     command.downgrade(cfg, "0003")
     with engine.connect() as conn:
         assert conn.execute(text("SELECT log FROM attempts WHERE id = 1")).scalar() == "old"
+
+
+def test_0005_adds_a_nullable_agent_seconds_and_keeps_attempts(tmp_path: Path) -> None:
+    from sqlalchemy import text
+
+    url = f"sqlite+pysqlite:///{tmp_path / 'm5.db'}"
+    cfg = Config(str(ROOT / "alembic.ini"))
+    cfg.set_main_option("script_location", str(ROOT / "migrations"))
+    cfg.set_main_option("sqlalchemy.url", url)
+    command.upgrade(cfg, "0004")
+    engine = create_engine(url)
+    with engine.begin() as conn:
+        conn.execute(text("INSERT INTO advisories (id, aliases) VALUES ('CVE-1', '')"))
+        conn.execute(
+            text(
+                "INSERT INTO affected (id, advisory_id, stream, image, package, version, status,"
+                " created_at) VALUES (1, 'CVE-1', 'debian', 'nginx', 'nginx', '1', 'PENDING', 1.0)"
+            )
+        )
+        conn.execute(
+            text(
+                "INSERT INTO attempts (id, affected_id, outcome, started_at, tokens_in, tokens_out,"
+                " cost_usd, log) VALUES (1, 1, 'FAILED', 2.0, 10, 5, 0.1, 'old')"
+            )
+        )
+    command.upgrade(cfg, "head")
+    with engine.connect() as conn:
+        assert (
+            conn.execute(text("SELECT agent_seconds FROM attempts WHERE id = 1")).scalar() is None
+        )
+    command.downgrade(cfg, "0004")
+    with engine.connect() as conn:
+        assert conn.execute(text("SELECT log FROM attempts WHERE id = 1")).scalar() == "old"

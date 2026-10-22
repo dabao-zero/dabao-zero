@@ -12,7 +12,7 @@ from dabao.leases import acquire_lease
 from dabao.models import Component, Finding, Patch, PatchSource
 from dabao.orchestrator import Limits, Outcome, Pipeline, process, run_once
 from dabao.orm import AdvisoryRow, AffectedRow, ArtifactRow, AttemptRow, PatchRow
-from dabao.seams import SuiteResult
+from dabao.seams import AgentResult, SuiteResult
 from dabao.signing import GuardedSigner
 
 SRC = "https://github.com/nginx/nginx/commit/"
@@ -268,3 +268,36 @@ def test_ordinary_attempts_are_recorded_as_agent_runs(pending: sessionmaker[Sess
     process(pending, pipeline(), 1)
     with pending() as s:
         assert s.scalars(select(AttemptRow)).one().runner == "agent"
+
+
+class SlowAgent:
+    """An agent that takes `seconds` of (fake) wall time and reports its own figure if given."""
+
+    def __init__(
+        self, clock: fakes.FakeClock, seconds: float, reported: float | None = None
+    ) -> None:
+        self.clock, self.seconds, self.reported = clock, seconds, reported
+
+    def propose_patch(self, advisory: object, component: object) -> AgentResult:
+        self.clock.advance(self.seconds)
+        return AgentResult(PATCH, 10, 5, 0.25, "log", agent_seconds=self.reported)
+
+
+def test_agent_wall_time_is_measured_around_the_agent_call(pending: sessionmaker[Session]) -> None:
+    clock = fakes.FakeClock(1000.0)
+    p = replace(pipeline(clock=clock), agent=SlowAgent(clock, 42.0))
+    process(pending, p, 1)
+    with pending() as s:
+        a = s.scalars(select(AttemptRow)).one()
+        assert a.agent_seconds == 42.0
+        assert (a.tokens_in, a.tokens_out, a.cost_usd) == (10, 5, 0.25)
+
+
+def test_a_run_that_happened_elsewhere_reports_its_own_wall_time(
+    pending: sessionmaker[Session],
+) -> None:
+    clock = fakes.FakeClock(1000.0)
+    p = replace(pipeline(clock=clock), agent=SlowAgent(clock, 1.0, reported=378.0))
+    process(pending, p, 1)
+    with pending() as s:
+        assert s.scalars(select(AttemptRow)).one().agent_seconds == 378.0

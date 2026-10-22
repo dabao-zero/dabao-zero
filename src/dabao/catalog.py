@@ -69,6 +69,7 @@ class Stats:
 class Run:
     attempt_id: int
     runner: str
+    agent_seconds: float | None
     advisory_id: str
     image: str
     package: str
@@ -185,6 +186,7 @@ def recent_runs(session: Session, limit: int = 20) -> list[Run]:
         Run(
             attempt_id=a.id,
             runner=a.runner,
+            agent_seconds=a.agent_seconds,
             advisory_id=a.affected.advisory_id,
             image=a.affected.image,
             package=a.affected.package,
