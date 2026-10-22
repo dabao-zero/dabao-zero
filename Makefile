@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help sync lint format typecheck test-unit test-integration db-up db-down check frontend-check demo run hooks
+.PHONY: help sync lint format typecheck test-unit test-integration test-docker db-up db-down check frontend-check demo run hooks
 
 help: ## List targets
 	@grep -E '^[a-zA-Z_-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-18s %s\n", $$1, $$2}'
@@ -24,6 +24,9 @@ test-unit: ## Fast layer: no Docker, no network
 
 test-integration: ## Postgres tests (run `make db-up` first); skips without DATABASE_URL_TEST
 	DATABASE_URL_TEST=$${DATABASE_URL_TEST:-postgresql+psycopg://postgres:postgres@localhost:5432/postgres} uv run pytest tests/integration -q -m integration
+
+test-docker: ## Real image builds (slow; needs Docker, buildx and network)
+	uv run pytest tests/integration -q -m docker
 
 db-up: ## Start a throwaway local Postgres 17 on :5432 (needs Docker)
 	docker run -d --rm --name dabao-pg -e POSTGRES_PASSWORD=postgres -p 5432:5432 postgres:17

@@ -35,7 +35,10 @@ packages = ["src/dabao"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-markers = ["integration: needs Docker or other real infrastructure"]
+markers = [
+  "integration: needs Docker or other real infrastructure",
+  "docker: builds real images; slow, needs Docker, buildx and network (make test-docker)",
+]
 addopts = "-ra --strict-markers"
 
 [tool.ruff]
