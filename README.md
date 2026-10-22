@@ -62,7 +62,11 @@ cd frontend && npm ci
 DABAO_API=http://127.0.0.1:8000 npm run dev    # open the URL Vite prints
 ```
 
-![The dabao-zero catalog with six demo images, each showing its open CVE count](docs/img/ledger-demo.png)
+![The landing page: what dabao-zero is, the one-line FROM swap, how a fix is made and the honest limits](docs/img/landing-demo.png)
+
+![The catalog at #/images with six demo images, each showing its open CVE count](docs/img/ledger-demo.png)
+
+![The catalog filtered to images with open CVEs and sorted by most open CVEs](docs/img/catalog-filtered-demo.png)
 
 ![An image page with its tag table, including a revoked tag](docs/img/image-demo.png)
 
