@@ -44,7 +44,7 @@
 </script>
 
 <nav aria-label="Breadcrumb" class="ts-body-medium muted" style="display: flex; gap: 8px; align-items: center; margin-top: 8px;">
-  <a class="link" href="#/">Images</a><span aria-hidden="true">/</span><span aria-current="page">{image.name}</span>
+  <a class="link" href="#/images">Images</a><span aria-hidden="true">/</span><span aria-current="page">{image.name}</span>
 </nav>
 
 <section style="display: flex; flex-wrap: wrap; gap: 24px 40px; align-items: flex-start; margin-top: 20px;">

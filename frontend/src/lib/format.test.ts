@@ -21,7 +21,9 @@ describe("format", () => {
 
 describe("parseRoute", () => {
   it("parses every route", () => {
-    expect(parseRoute("")).toEqual({ page: "catalog" });
+    expect(parseRoute("")).toEqual({ page: "home" });
+    expect(parseRoute("#/")).toEqual({ page: "home" });
+    expect(parseRoute("#/images")).toEqual({ page: "catalog" });
     expect(parseRoute("#/about")).toEqual({ page: "about" });
     expect(parseRoute("#/images/nginx")).toEqual({ page: "image", name: "nginx", tab: "tags" });
     expect(parseRoute("#/images/nginx/verify")).toEqual({ page: "image", name: "nginx", tab: "verify" });
