@@ -53,6 +53,7 @@ No SLA and no warranty; use at your own risk (ADR-0001).
 | R6 | Debian, Alpine and Wolfi streams share one pipeline | Must-have |
 | R7 | Public ledger of advisories, attempts, patches and time-to-patch | Must-have |
 | R8 | Original-fix stream can be turned on later without redesign | Nice-to-have |
+| R9 | Users whose scanners ignore VEX can reach zero fixable findings from a stock scan (ADR-0011) | Must-have for the zero-finding tier; not achievable on Debian |
 
 ## Shape
 
