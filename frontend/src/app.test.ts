@@ -35,7 +35,7 @@ describe("catalog", () => {
   });
   it("offers a pull command under the registry", () => {
     render(CatalogView, { images });
-    expect(screen.getByText(/docker pull ghcr\.io\/leejianrong\/nginx:1\.22\.0-1-dabao1/)).toBeTruthy();
+    expect(screen.getByText(/docker pull ghcr\.io\/dabao-zero\/nginx:1\.22\.0-1-dabao1/)).toBeTruthy();
   });
 });
 
