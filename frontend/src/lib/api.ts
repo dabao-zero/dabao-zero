@@ -52,6 +52,7 @@ export interface Gate {
 
 export interface Attempt {
   id: number;
+  runner: string;
   outcome: string;
   started_at: number;
   finished_at: number | null;
@@ -81,6 +82,7 @@ export interface Stats {
 
 export interface Run {
   attempt_id: number;
+  runner: string;
   advisory_id: string;
   image: string;
   package: string;

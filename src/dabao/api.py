@@ -33,6 +33,7 @@ class GateOut(BaseModel):
 
 class AttemptOut(BaseModel):
     id: int
+    runner: str  # "agent" or "manual_codex" (ADR-0009)
     outcome: str
     started_at: float
     finished_at: float | None
@@ -112,6 +113,7 @@ class StatsOut(BaseModel):
 
 class RunOut(BaseModel):
     attempt_id: int
+    runner: str
     advisory_id: str
     image: str
     package: str
@@ -153,6 +155,7 @@ def _attempt(a: AttemptRow) -> AttemptOut:
     p = a.patch
     return AttemptOut(
         id=a.id,
+        runner=a.runner,
         outcome=a.outcome,
         started_at=a.started_at,
         finished_at=a.finished_at,

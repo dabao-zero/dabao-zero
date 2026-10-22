@@ -149,3 +149,21 @@ def test_advisory_detail_includes_gates_and_ignores_malformed_entries(
     body = client(seeded, clock).get("/v1/advisories/CVE-2024-0001").json()
     gates = body["affected"][0]["attempts"][0]["gates"]
     assert gates == [{"name": "tests_pass", "passed": True, "reason": "ok"}]
+
+
+def test_attempts_and_runs_say_who_ran_them(
+    seeded: sessionmaker[Session], clock: FakeClock
+) -> None:
+    from dabao.orm import AttemptRow
+
+    c = client(seeded, clock)
+    assert c.get("/v1/runs").json()[0]["runner"] == "agent"
+    assert c.get("/v1/advisories/CVE-2024-0001").json()["affected"][0]["attempts"][0]["runner"] == (
+        "agent"
+    )
+    with seeded() as s:
+        s.get(AttemptRow, 1).runner = "manual_codex"  # type: ignore[union-attr]
+        s.commit()
+    assert c.get("/v1/runs").json()[0]["runner"] == "manual_codex"
+    body = c.get("/v1/advisories/CVE-2024-0001").json()
+    assert body["affected"][0]["attempts"][0]["runner"] == "manual_codex"

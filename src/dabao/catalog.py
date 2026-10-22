@@ -68,6 +68,7 @@ class Stats:
 @dataclass(frozen=True)
 class Run:
     attempt_id: int
+    runner: str
     advisory_id: str
     image: str
     package: str
@@ -183,6 +184,7 @@ def recent_runs(session: Session, limit: int = 20) -> list[Run]:
     return [
         Run(
             attempt_id=a.id,
+            runner=a.runner,
             advisory_id=a.affected.advisory_id,
             image=a.affected.image,
             package=a.affected.package,
