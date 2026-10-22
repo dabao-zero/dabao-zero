@@ -62,7 +62,7 @@ export type ImageTab = "overview" | "tags" | "fixes" | "verify";
 export const IMAGE_TABS: ImageTab[] = ["overview", "tags", "fixes", "verify"];
 
 export function parseRoute(hash: string): Route {
-  const parts = hash.replace(/^#\/?/, "").split("/").filter(Boolean).map(decodeURIComponent);
+  const parts = hash.split("?")[0].replace(/^#\/?/, "").split("/").filter(Boolean).map(decodeURIComponent);
   if (parts.length === 0) return { page: "home" };
   if (parts[0] === "images" && parts.length === 1) return { page: "catalog" };
   if (parts[0] === "about" && parts.length === 1) return { page: "about" };
@@ -83,3 +83,40 @@ export const imageHref = (name: string, tab?: ImageTab) =>
   `#/images/${encodeURIComponent(name)}${tab ? `/${tab}` : ""}`;
 export const fixHref = (id: string, row?: number) =>
   `#/fixes/${encodeURIComponent(id)}${row === undefined ? "" : `/${row}`}`;
+
+export type CatalogStatus = "all" | "open" | "fixed";
+export type CatalogSort = "name" | "open" | "updated";
+export interface CatalogQuery {
+  q: string;
+  base: string;
+  status: CatalogStatus;
+  sort: CatalogSort;
+}
+
+export const DEFAULT_QUERY: CatalogQuery = { q: "", base: "all", status: "all", sort: "name" };
+const STATUSES: CatalogStatus[] = ["all", "open", "fixed"];
+const SORTS: CatalogSort[] = ["name", "open", "updated"];
+
+/** Read the catalog filters from the part of the hash after `?`. Bad values fall back to defaults. */
+export function parseCatalogQuery(hash: string): CatalogQuery {
+  const params = new URLSearchParams(hash.includes("?") ? hash.slice(hash.indexOf("?") + 1) : "");
+  const status = params.get("status") as CatalogStatus;
+  const sort = params.get("sort") as CatalogSort;
+  return {
+    q: params.get("q") ?? DEFAULT_QUERY.q,
+    base: params.get("base") || DEFAULT_QUERY.base,
+    status: STATUSES.includes(status) ? status : DEFAULT_QUERY.status,
+    sort: SORTS.includes(sort) ? sort : DEFAULT_QUERY.sort,
+  };
+}
+
+/** `#/images` plus only the filters that differ from the defaults. */
+export function catalogHref(s: CatalogQuery): string {
+  const params = new URLSearchParams();
+  if (s.q.trim() !== "") params.set("q", s.q);
+  if (s.base !== DEFAULT_QUERY.base) params.set("base", s.base);
+  if (s.status !== DEFAULT_QUERY.status) params.set("status", s.status);
+  if (s.sort !== DEFAULT_QUERY.sort) params.set("sort", s.sort);
+  const qs = params.toString();
+  return qs ? `#/images?${qs}` : "#/images";
+}

@@ -33,7 +33,7 @@
   {#if route.page === "home"}
     <Landing />
   {:else if route.page === "catalog"}
-    <Catalog />
+    {#key hash}<Catalog />{/key}
   {:else if route.page === "image"}
     {#key route.name}<Image name={route.name} tab={route.tab} />{/key}
   {:else if route.page === "fix"}

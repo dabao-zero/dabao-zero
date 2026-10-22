@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fixHref, formatDuration, imageHref, openCvesLabel, parseRoute, relativeTime } from "./format";
+import { catalogHref, fixHref, formatDuration, imageHref, openCvesLabel, parseCatalogQuery, parseRoute, relativeTime } from "./format";
 
 describe("format", () => {
   it("formats durations", () => {
@@ -38,5 +38,25 @@ describe("parseRoute", () => {
   it("round-trips hrefs", () => {
     expect(parseRoute(imageHref("a b", "fixes"))).toEqual({ page: "image", name: "a b", tab: "fixes" });
     expect(parseRoute(fixHref("X/Y", 2))).toEqual({ page: "fix", id: "X/Y", row: 2 });
+  });
+});
+
+describe("catalog query", () => {
+  it("routes #/images with or without a query to the catalog", () => {
+    expect(parseRoute("#/images?base=alpine&sort=open")).toEqual({ page: "catalog" });
+  });
+  it("parses filters and falls back to defaults on bad values", () => {
+    expect(parseCatalogQuery("#/images?q=re&base=alpine&status=open&sort=open")).toEqual({
+      q: "re", base: "alpine", status: "open", sort: "open",
+    });
+    expect(parseCatalogQuery("#/images?status=bogus&sort=nope")).toEqual({
+      q: "", base: "all", status: "all", sort: "name",
+    });
+    expect(parseCatalogQuery("")).toEqual({ q: "", base: "all", status: "all", sort: "name" });
+  });
+  it("builds a short href and round-trips", () => {
+    expect(catalogHref({ q: "", base: "all", status: "all", sort: "name" })).toBe("#/images");
+    const s = { q: "a b", base: "alpine", status: "fixed" as const, sort: "updated" as const };
+    expect(parseCatalogQuery(catalogHref(s))).toEqual(s);
   });
 });
