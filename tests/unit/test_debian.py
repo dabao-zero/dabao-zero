@@ -99,6 +99,18 @@ def test_dockerfile_fails_the_build_if_the_patch_does_not_apply() -> None:
     assert "--log=/dev/null" in df  # dpkg's own log would make the image differ run to run
 
 
+def test_the_package_is_built_as_a_normal_user_not_root() -> None:
+    df = render_dockerfile(COMP, BASE)  # tar's configure refuses to run as root
+    assert "useradd" in df and "runuser -u builder" in df and "chown -R builder" in df
+    assert df.index("patch -p1") < df.index("chown -R builder") < df.index("runuser -u builder")
+
+
+def test_logs_with_timestamps_are_removed_so_the_digest_is_stable() -> None:
+    df = render_dockerfile(COMP, BASE)  # found by comparing two real builds of tar
+    assert "rm -f /var/log/alternatives.log" in df
+    assert df.index("dpkg --log=/dev/null -i") < df.index("rm -f /var/log/alternatives.log")
+
+
 def test_same_inputs_render_the_same_dockerfile() -> None:
     assert render_dockerfile(COMP, BASE) == render_dockerfile(COMP, BASE)
 

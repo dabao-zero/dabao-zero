@@ -82,9 +82,11 @@ COPY patch.diff changelog.entry /ctx/
 RUN set -eu; cd src; \\
     patch -p1 --no-backup-if-mismatch < /ctx/patch.diff; \\
     cat /ctx/changelog.entry debian/changelog > /tmp/changelog; mv /tmp/changelog debian/changelog
-RUN set -eu; cd src; \\
-    DEB_BUILD_OPTIONS="nocheck parallel=$(nproc)" dpkg-buildpackage -b -uc -us; \\
-    mkdir /out; cp ../*.deb /out/
+RUN set -eu; useradd --create-home --uid 1000 builder; chown -R builder:builder /build; \\
+    runuser -u builder -- env SOURCE_DATE_EPOCH="$SOURCE_DATE_EPOCH" \\
+      DEB_BUILD_OPTIONS="nocheck parallel=$(nproc)" \\
+      sh -c 'cd src && dpkg-buildpackage -b -uc -us'; \\
+    mkdir /out; cp ./*.deb /out/
 
 FROM {base.image}@{base.digest}
 COPY --from=build /out/ /tmp/dabao-debs/
@@ -95,7 +97,7 @@ RUN set -eu; cd /tmp/dabao-debs; keep=""; \\
     done; \\
     [ -n "$keep" ] || {{ echo "no rebuilt package is in the base image" >&2; exit 1; }}; \\
     dpkg --log=/dev/null -i $keep; \\
-    cd /; rm -rf /tmp/dabao-debs
+    cd /; rm -rf /tmp/dabao-debs; rm -f /var/log/alternatives.log
 """
 
 
