@@ -262,3 +262,9 @@ def test_failed_attempt_stores_which_gate_failed(pending: sessionmaker[Session])
     with pending() as s:
         gates = json.loads(s.scalars(select(AttemptRow)).one().verdict or "[]")
     assert {g["name"] for g in gates if not g["passed"]} == {"scanners_clear"}
+
+
+def test_ordinary_attempts_are_recorded_as_agent_runs(pending: sessionmaker[Session]) -> None:
+    process(pending, pipeline(), 1)
+    with pending() as s:
+        assert s.scalars(select(AttemptRow)).one().runner == "agent"

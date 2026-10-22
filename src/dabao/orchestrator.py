@@ -69,6 +69,7 @@ class Pipeline:
     gates: GateConfig = field(default_factory=GateConfig)
     limits: Limits = field(default_factory=Limits)
     owner: str = "orchestrator-1"
+    runner: str = "agent"  # recorded on every attempt; "manual_codex" for imported bundles
 
 
 def _component(row: AffectedRow) -> Component:
@@ -132,7 +133,9 @@ def _attempt(session: Session, p: Pipeline, affected_id: int) -> Outcome:
         AdvisoryStatus.NOT_AFFECTED.value,
     ):
         return Outcome.SKIPPED
-    attempt = AttemptRow(affected_id=affected_id, outcome="RUNNING", started_at=p.clock.now())
+    attempt = AttemptRow(
+        affected_id=affected_id, outcome="RUNNING", started_at=p.clock.now(), runner=p.runner
+    )
     session.add(attempt)
     session.commit()
     advisory, component = _advisory(affected.advisory), _component(affected)

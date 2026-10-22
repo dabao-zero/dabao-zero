@@ -68,6 +68,7 @@ def test_good_bundle_goes_through_the_gates_and_is_marked_manual(
     with pending() as s:
         attempt = s.scalars(select(AttemptRow)).one()
         assert attempt.outcome == "SUCCEEDED"
+        assert attempt.runner == "manual_codex"
         assert attempt.log.startswith("runner=manual_codex")
         assert "codex transcript" in attempt.log
         assert s.scalars(select(ArtifactRow)).one().image == "nginx"
