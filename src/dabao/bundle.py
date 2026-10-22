@@ -13,7 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_valida
 
 from dabao.models import Patch, PatchSource
 
-BUNDLE_VERSION = 1
+BUNDLE_VERSION: Literal[1] = 1
 
 
 class Runner(StrEnum):
