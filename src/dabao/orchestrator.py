@@ -140,7 +140,12 @@ def _attempt(session: Session, p: Pipeline, affected_id: int) -> Outcome:
     session.commit()
     advisory, component = _advisory(affected.advisory), _component(affected)
     try:
+        agent_started = p.clock.now()
         result = p.agent.propose_patch(advisory, component)
+        measured = p.clock.now() - agent_started
+        attempt.agent_seconds = (
+            result.agent_seconds if result.agent_seconds is not None else measured
+        )
         attempt.tokens_in, attempt.tokens_out = result.tokens_in, result.tokens_out
         attempt.cost_usd, attempt.log = result.cost_usd, result.log
         session.commit()

@@ -20,6 +20,7 @@ class AgentResult:
     tokens_out: int = 0
     cost_usd: float = 0.0
     log: str = ""
+    agent_seconds: float | None = None  # set when the run happened elsewhere; else measured
 
 
 class AgentRunner(Protocol):
