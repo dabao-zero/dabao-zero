@@ -60,6 +60,8 @@ class AttemptRow(Base):
     cost_usd: Mapped[float] = mapped_column(Float, default=0.0)
     log: Mapped[str] = mapped_column(Text, default="")
     verdict: Mapped[str | None] = mapped_column(Text, default=None)  # JSON gate results
+    # Who ran the agent: "agent" (unattended) or "manual_codex" (ADR-0009). Shown on the ledger.
+    runner: Mapped[str] = mapped_column(String, default="agent", server_default="agent")
 
     affected: Mapped[AffectedRow] = relationship(back_populates="attempts")
     patch: Mapped[PatchRow | None] = relationship(back_populates="attempt", uselist=False)

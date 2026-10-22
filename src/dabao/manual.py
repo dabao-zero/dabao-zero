@@ -59,5 +59,5 @@ def import_bundle(
             f"no affected row for {patch.advisory_id} {patch.component.stream}/"
             f"{patch.component.package}@{patch.component.version}"
         )
-    manual = replace(p, agent=BundleAgent(bundle))
+    manual = replace(p, agent=BundleAgent(bundle), runner=bundle.runner.value)
     return [process(factory, manual, i) for i in ids]
