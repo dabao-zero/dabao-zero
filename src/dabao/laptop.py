@@ -105,18 +105,30 @@ def codex_command(
     return cmd
 
 
+def default_scratch_root() -> Path:
+    """Under the user cache dir, never /tmp: Codex will not create its sandbox helper there."""
+    base = os.environ.get("XDG_CACHE_HOME") or str(Path.home() / ".cache")
+    return Path(base) / "dabao-attempts"
+
+
 @dataclass(frozen=True)
 class ExecCodexRunner:
     """Runs the real `codex exec`. Needs the Codex CLI and a logged-in subscription."""
 
     model: str | None = None
     network: bool = False
+    timeout_s: float = 1800.0  # a stuck run must not wait forever
 
     def run(self, prompt: str, workdir: Path, env: dict[str, str]) -> CodexRun:
         schema, out = workdir.parent / "schema.json", workdir.parent / "last.txt"
         schema.write_text(json.dumps(OUTPUT_SCHEMA))
         cmd = codex_command(workdir, schema, out, self.model, network=self.network) + [prompt]
-        proc = subprocess.run(cmd, env=env, capture_output=True, text=True, check=False)
+        try:
+            proc = subprocess.run(
+                cmd, env=env, capture_output=True, text=True, check=False, timeout=self.timeout_s
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise LaptopAttemptError(f"codex timed out after {self.timeout_s:g}s") from exc
         if proc.returncode != 0:
             raise LaptopAttemptError(f"codex exited {proc.returncode}: {proc.stderr[-500:]}")
         version = subprocess.run(
@@ -151,7 +163,9 @@ def run_attempt(
     scratch_root: Path,
     model: str,
     now: float,
+    log_path: Path | None = None,
 ) -> CandidateBundle:
+    scratch_root.mkdir(parents=True, exist_ok=True)
     scratch = Path(tempfile.mkdtemp(prefix="dabao-attempt-", dir=scratch_root))
     try:
         workdir, home, codex_home = scratch / "work", scratch / "home", scratch / "codex"
@@ -169,10 +183,13 @@ def run_attempt(
         env = sandbox_env(environ, home, codex_home)
         run = runner.run(build_prompt(advisory_id, component), workdir, env)
 
+        if log_path is not None:
+            log_path.write_text(run.log)  # kept even when the run produced nothing usable
         _git(workdir, "add", "-A")
         diff = _git(workdir, "diff", "--cached", "--binary", base)
         if not diff.strip():
-            raise LaptopAttemptError("codex made no change; nothing to import")
+            said = run.final_message.strip()[:800]
+            raise LaptopAttemptError(f"codex made no change; nothing to import. It said: {said}")
         try:
             final = json.loads(run.final_message)
             ref, links = str(final["upstream_ref"]), tuple(str(x) for x in final["upstream_links"])
@@ -212,7 +229,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     p.add_argument("--version", required=True)
     p.add_argument("--out", type=Path, required=True, help="where to write the bundle JSON")
     p.add_argument("--model", default=None, help="passed to codex -m; default is Codex's own")
+    p.add_argument("--timeout", type=float, default=1800.0, help="seconds before codex is stopped")
     p.add_argument("--network", action="store_true", help="let the sandbox reach the network")
+    p.add_argument("--log", type=Path, default=None, help="keep the Codex event log here")
     p.add_argument("--codex-auth", type=Path, default=Path.home() / ".codex" / "auth.json")
     args = p.parse_args(argv)
     if not args.codex_auth.is_file():
@@ -220,16 +239,17 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 2
     try:
         bundle = run_attempt(
-            ExecCodexRunner(model=args.model, network=args.network),
+            ExecCodexRunner(model=args.model, network=args.network, timeout_s=args.timeout),
             source_dir=args.source_dir,
             advisory_id=args.advisory,
             component=Component(stream=args.stream, package=args.package, version=args.version),
             out_path=args.out,
             auth_file=args.codex_auth,
             environ=os.environ,
-            scratch_root=Path(tempfile.gettempdir()),
+            scratch_root=default_scratch_root(),
             model=args.model or "codex-default",
             now=time.time(),
+            log_path=args.log,
         )
     except LaptopAttemptError as exc:
         print(json.dumps({"error": str(exc)}))

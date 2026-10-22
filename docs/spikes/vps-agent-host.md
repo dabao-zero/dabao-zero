@@ -13,6 +13,10 @@ Phase 1: Codex on Jian's laptop with his own subscription, started by hand, resu
 through the unchanged gates (ADR-0009, epic E8). Phase 2: unattended on a Droplet with kopicode and an
 API key through OpenRouter (epic E7). Codex is still measured in E7 using an API key.
 
+Result of the first phase-1 run (tar CVE-2022-48303, 2026-10-22): Codex produced a correct upstream backport in
+378 s and about 1.08 M input tokens, byte-identical in effect to Debian's own patch, and four of five gates passed. Numbers
+and the scanner-gate finding are in `docs/e1-codex-baseline.md`; that is the baseline for the kopicode comparison.
+
 ## Verdict so far
 
 - **VPS: yes, with one exception.** Debian package rebuilds, `docker build`, Grype/Trivy and the
