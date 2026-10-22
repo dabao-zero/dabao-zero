@@ -31,7 +31,17 @@ class BundleAgent:
     def propose_patch(self, advisory: Advisory, component: Component) -> AgentResult:
         b = self.bundle
         log = f"runner={b.runner.value} model={b.model} tools={b.tool_versions}\n{b.run_log}"
-        return AgentResult(patch=b.patch, log=log)
+        u = b.usage
+        if u is None:
+            return AgentResult(patch=b.patch, log=log)
+        return AgentResult(
+            patch=b.patch,
+            tokens_in=u.tokens_in,
+            tokens_out=u.tokens_out,
+            cost_usd=u.cost_usd,
+            log=log,
+            agent_seconds=u.wall_seconds,
+        )
 
 
 def import_bundle(

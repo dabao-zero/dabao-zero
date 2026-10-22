@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { AdvisoryDetail } from "../lib/api";
   import { GATE_LABELS, parseDiff } from "../lib/diff";
-  import { fixHref, imageHref } from "../lib/format";
+  import { agentRunSummary, fixHref, imageHref } from "../lib/format";
   import Icon from "../components/Icon.svelte";
   import Receipt from "../components/Receipt.svelte";
   import StatusPill from "../components/StatusPill.svelte";
@@ -10,6 +10,7 @@
 
   const row = $derived(advisory.affected.find((r) => r.id === rowId) ?? advisory.affected[0] ?? null);
   const attempt = $derived(row && row.attempts.length > 0 ? row.attempts[row.attempts.length - 1] : null);
+  const runSummary = $derived(attempt ? agentRunSummary(attempt) : null);
   const diff = $derived(attempt?.patch_diff ? parseDiff(attempt.patch_diff) : null);
   const others = $derived(advisory.affected.filter((r) => r !== row));
   const fixed = $derived(row?.status === "PATCHED");
@@ -37,6 +38,9 @@
     <StatusPill kind={fixed ? "good" : row.status === "NEEDS_HUMAN" ? "human" : row.status === "PENDING" ? "quiet" : "bad"} label={fixed ? "Fixed" : row.status === "NEEDS_HUMAN" ? "Needs a human" : row.status === "PENDING" ? "Queued" : "Open"} icon={fixed} />
   </div>
   <p class="ts-body-large muted" style="margin-top: 8px; max-width: 64ch;">{intro}</p>
+  {#if runSummary}
+    <p class="ts-body-medium muted" style="margin-top: 4px;">Agent run: {runSummary}</p>
+  {/if}
   {#if attempt?.runner === "manual_codex"}
     <p class="ts-body-medium muted" style="margin-top: 4px;">Agent-patched, run started by the maintainer. The same automatic checks decided it.</p>
   {/if}

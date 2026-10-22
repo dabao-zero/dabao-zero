@@ -100,3 +100,17 @@ def test_bundle_is_frozen() -> None:
     assert isinstance(b, CandidateBundle)
     with pytest.raises(ValueError):
         b.model = "other"
+
+
+def test_usage_is_optional_and_validated() -> None:
+    assert load_bundle(json.dumps(good())).usage is None
+    doc = good()
+    doc["usage"] = {"tokens_in": 1000, "tokens_out": 50, "cost_usd": 0.0, "wall_seconds": 378.0}
+    b = load_bundle(json.dumps(doc))
+    assert b.usage is not None and b.usage.wall_seconds == 378.0
+    doc["usage"] = {"tokens_in": -1, "tokens_out": 50, "cost_usd": 0.0, "wall_seconds": 1.0}
+    with pytest.raises(BundleError, match="tokens_in"):
+        load_bundle(json.dumps(doc))
+    doc["usage"] = {"tokens_in": 1, "tokens_out": 1, "cost_usd": 0.0, "wall_seconds": 1.0, "x": 1}
+    with pytest.raises(BundleError, match="usage"):
+        load_bundle(json.dumps(doc))

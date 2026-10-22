@@ -39,6 +39,9 @@ uv run python -m dabao.laptop \
 - Exit 1 with `codex made no change` means no upstream fix was found. That is a valid outcome:
   the advisory stays `UNPATCHED`. Do not nudge Codex into writing its own fix (ADR-0003).
 
+The bundle records Codex's token counts and the wall time of the run (`usage`); the ledger shows them as the
+agent's time and tokens. A subscription run has no per-token price, so its cost is 0.
+
 What the script does: copies the source to a scratch directory, gives Codex only `PATH`, `LANG`, `TERM`
 and a throwaway `HOME`, copies your Codex login into a throwaway `CODEX_HOME`, runs
 `codex exec --sandbox workspace-write`, builds the diff against a baseline commit, and deletes the

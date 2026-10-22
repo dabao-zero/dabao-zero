@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { catalogHref, fixHref, formatDuration, imageHref, openCvesLabel, parseCatalogQuery, parseRoute, relativeTime } from "./format";
+import { agentRunSummary, catalogHref, fixHref, formatDuration, imageHref, openCvesLabel, parseCatalogQuery, parseRoute, relativeTime } from "./format";
 
 describe("format", () => {
   it("formats durations", () => {
@@ -58,5 +58,18 @@ describe("catalog query", () => {
     expect(catalogHref({ q: "", base: "all", status: "all", sort: "name" })).toBe("#/images");
     const s = { q: "a b", base: "alpine", status: "fixed" as const, sort: "updated" as const };
     expect(parseCatalogQuery(catalogHref(s))).toEqual(s);
+  });
+});
+
+describe("agentRunSummary", () => {
+  it("joins time, tokens and cost, skipping what is unknown or zero", () => {
+    expect(agentRunSummary({ agent_seconds: 378, tokens_in: 1000, tokens_out: 200, cost_usd: 0.12 })).toBe(
+      "6m · 1,000 tokens in, 200 out · $0.12",
+    );
+    expect(agentRunSummary({ agent_seconds: 378, tokens_in: 1000, tokens_out: 200, cost_usd: 0 })).toBe(
+      "6m · 1,000 tokens in, 200 out",
+    );
+    expect(agentRunSummary({ agent_seconds: null, tokens_in: 0, tokens_out: 0, cost_usd: 0 })).toBeNull();
+    expect(agentRunSummary({ agent_seconds: 42, tokens_in: 0, tokens_out: 0, cost_usd: 0 })).toBe("42s");
   });
 });

@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from dabao import cli
-from dabao.bundle import BUNDLE_VERSION, CandidateBundle, Runner
+from dabao.bundle import BUNDLE_VERSION, CandidateBundle, Runner, Usage
 from dabao.fakes import FakeAgentRunner
 from dabao.leases import acquire_lease
 from dabao.manual import ManualImportRefused, import_bundle
@@ -72,6 +72,25 @@ def test_good_bundle_goes_through_the_gates_and_is_marked_manual(
         assert attempt.log.startswith("runner=manual_codex")
         assert "codex transcript" in attempt.log
         assert s.scalars(select(ArtifactRow)).one().image == "nginx"
+
+
+def test_the_bundles_usage_lands_on_the_attempt(pending: sessionmaker[Session]) -> None:
+    usage = Usage(tokens_in=1_076_405, tokens_out=3_811, cost_usd=0.0, wall_seconds=378.0)
+    p = replace(pipeline(), agent=FakeAgentRunner())
+    import_bundle(pending, p, bundle(usage=usage), enabled=True)
+    with pending() as s:
+        a = s.scalars(select(AttemptRow)).one()
+        assert (a.tokens_in, a.tokens_out, a.cost_usd) == (1_076_405, 3_811, 0.0)
+        assert a.agent_seconds == 378.0
+
+
+def test_a_bundle_without_usage_leaves_the_time_to_be_measured(
+    pending: sessionmaker[Session],
+) -> None:
+    import_bundle(pending, replace(pipeline(), agent=FakeAgentRunner()), bundle(), enabled=True)
+    with pending() as s:
+        a = s.scalars(select(AttemptRow)).one()
+        assert (a.tokens_in, a.tokens_out) == (0, 0) and a.agent_seconds == 0.0
 
 
 def test_bad_bundle_is_rejected_by_the_gates(pending: sessionmaker[Session]) -> None:

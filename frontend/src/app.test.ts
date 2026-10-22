@@ -94,6 +94,7 @@ describe("fix page", () => {
     expect(screen.getByText("+new")).toBeTruthy();
     expect(screen.getByText("1 failed")).toBeTruthy();
     expect(screen.queryByText(/started by the maintainer/i)).toBeNull();
+    expect(screen.getByText("Agent run: 6m · 1,000 tokens in, 200 out · $0.12")).toBeTruthy();
   });
 
   it("says when the maintainer started the run", () => {
@@ -146,6 +147,7 @@ describe("about", () => {
     render(AboutView, { stats, runs });
     expect(screen.getByText("$0.31")).toBeTruthy();
     expect(screen.getByText("Agent")).toBeTruthy();
+    expect(screen.getByText("6m")).toBeTruthy();  // the agent's own time, apart from "Took"
     expect(screen.getByRole("link", { name: "DEMO-1" })).toBeTruthy();
     expect(screen.getByText(/no warranty and no SLA/)).toBeTruthy();
   });
