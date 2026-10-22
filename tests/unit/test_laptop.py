@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from dabao.bundle import load_bundle
+from dabao.bundle import Usage, load_bundle
 from dabao.laptop import (
     CodexRun,
     ExecCodexRunner,
@@ -15,6 +15,7 @@ from dabao.laptop import (
     build_prompt,
     codex_command,
     default_scratch_root,
+    parse_codex_usage,
     run_attempt,
     sandbox_env,
 )
@@ -55,7 +56,12 @@ class FakeCodex:
             raise self.raises
         if self.edit:
             (workdir / "src.c").write_text("good\n")
-        return CodexRun(final_message=self.final, log="codex transcript", version="0.155.1")
+        return CodexRun(
+            final_message=self.final,
+            log="codex transcript",
+            version="0.155.1",
+            usage=Usage(tokens_in=1000, tokens_out=50, cost_usd=0.0, wall_seconds=12.5),
+        )
 
 
 @pytest.fixture
@@ -103,6 +109,7 @@ def test_emits_a_valid_bundle(source: Path, auth: Path, tmp_path: Path) -> None:
     assert "-bad" in b.patch.diff and "+good" in b.patch.diff
     assert b.patch.upstream_ref == REF and b.upstream_links == (REF,)
     assert b.tool_versions == {"codex": "0.155.1"} and b.run_log == "codex transcript"
+    assert b.usage == Usage(tokens_in=1000, tokens_out=50, cost_usd=0.0, wall_seconds=12.5)
     assert (source / "src.c").read_text() == "bad\n"  # the source tree itself is never touched
 
 
@@ -232,3 +239,24 @@ def test_a_hung_codex_is_stopped_and_reported(
     work.mkdir()
     with pytest.raises(LaptopAttemptError, match="timed out after 5s"):
         ExecCodexRunner(timeout_s=5).run("p", work, {})
+
+
+def test_usage_is_summed_over_the_turns_in_the_event_log() -> None:
+    log = "\n".join(
+        [
+            '{"type":"thread.started","thread_id":"t"}',
+            "not json at all",
+            '{"type":"turn.completed","usage":{"input_tokens":1000,"cached_input_tokens":900,'
+            '"output_tokens":40}}',
+            '{"type":"item.completed","item":{"type":"agent_message","text":"hi"}}',
+            '{"type":"turn.completed","usage":{"input_tokens":500,"output_tokens":10}}',
+        ]
+    )
+    u = parse_codex_usage(log, wall_seconds=7.0)
+    assert u == Usage(tokens_in=1500, tokens_out=50, cost_usd=0.0, wall_seconds=7.0)
+
+
+def test_a_log_without_usage_still_reports_the_wall_time() -> None:
+    assert parse_codex_usage("", wall_seconds=3.0) == Usage(
+        tokens_in=0, tokens_out=0, cost_usd=0.0, wall_seconds=3.0
+    )

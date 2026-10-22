@@ -23,7 +23,7 @@ from typing import Any, Protocol
 
 from pydantic import ValidationError
 
-from dabao.bundle import BUNDLE_VERSION, BundleError, CandidateBundle, Runner
+from dabao.bundle import BUNDLE_VERSION, BundleError, CandidateBundle, Runner, Usage
 from dabao.models import Component, Patch, PatchSource
 
 ENV_ALLOWLIST = ("PATH", "LANG", "LC_ALL", "TERM", "TZ")
@@ -49,10 +49,28 @@ class CodexRun:
     final_message: str
     log: str
     version: str
+    usage: Usage | None = None
 
 
 class CodexRunner(Protocol):
     def run(self, prompt: str, workdir: Path, env: dict[str, str]) -> CodexRun: ...
+
+
+def parse_codex_usage(log: str, wall_seconds: float) -> Usage:
+    """Sum token counts over the `turn.completed` events of `codex exec --json`."""
+    tokens_in = tokens_out = 0
+    for line in log.splitlines():
+        try:
+            event = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(event, dict) and event.get("type") == "turn.completed":
+            usage = event.get("usage") or {}
+            tokens_in += int(usage.get("input_tokens", 0))
+            tokens_out += int(usage.get("output_tokens", 0))
+    return Usage(
+        tokens_in=tokens_in, tokens_out=tokens_out, cost_usd=0.0, wall_seconds=wall_seconds
+    )
 
 
 def sandbox_env(environ: Mapping[str, str], home: Path, codex_home: Path) -> dict[str, str]:
@@ -123,6 +141,7 @@ class ExecCodexRunner:
         schema, out = workdir.parent / "schema.json", workdir.parent / "last.txt"
         schema.write_text(json.dumps(OUTPUT_SCHEMA))
         cmd = codex_command(workdir, schema, out, self.model, network=self.network) + [prompt]
+        started = time.monotonic()
         try:
             proc = subprocess.run(
                 cmd, env=env, capture_output=True, text=True, check=False, timeout=self.timeout_s
@@ -135,7 +154,12 @@ class ExecCodexRunner:
             ["codex", "--version"], env=env, capture_output=True, text=True, check=False
         ).stdout.strip()
         final = out.read_text() if out.exists() else ""
-        return CodexRun(final_message=final, log=proc.stdout, version=version.split()[-1])
+        return CodexRun(
+            final_message=final,
+            log=proc.stdout,
+            version=version.split()[-1],
+            usage=parse_codex_usage(proc.stdout, time.monotonic() - started),
+        )
 
 
 def _git(cwd: Path, *args: str) -> str:
@@ -211,6 +235,7 @@ def run_attempt(
                 tool_versions={"codex": run.version},
                 model=model,
                 created_at=now,
+                usage=run.usage,
             )
         except (ValidationError, BundleError) as exc:
             raise LaptopAttemptError(f"candidate is not a valid bundle: {exc}") from exc

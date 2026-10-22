@@ -24,6 +24,17 @@ class BundleError(ValueError):
     """The bundle is not valid; the message names the offending fields."""
 
 
+class Usage(BaseModel):
+    """What the run cost. A subscription run has no per-token price, so cost_usd is 0.0."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    tokens_in: int = Field(ge=0)
+    tokens_out: int = Field(ge=0)
+    cost_usd: float = Field(ge=0)
+    wall_seconds: float = Field(ge=0)
+
+
 class CandidateBundle(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
@@ -35,6 +46,7 @@ class CandidateBundle(BaseModel):
     tool_versions: dict[str, str]
     model: str
     created_at: float
+    usage: Usage | None = None  # optional so older bundles still load
 
     @model_validator(mode="after")
     def _check_patch(self) -> CandidateBundle:

@@ -45,6 +45,22 @@ export function formatCount(n: number): string {
   return n.toLocaleString("en-US");
 }
 
+/** "6m · 1,000 tokens in, 200 out · $0.12", leaving out what is unknown or zero; null if nothing. */
+export function agentRunSummary(a: {
+  agent_seconds: number | null;
+  tokens_in: number;
+  tokens_out: number;
+  cost_usd: number;
+}): string | null {
+  const parts: string[] = [];
+  if (a.agent_seconds !== null) parts.push(formatDuration(a.agent_seconds));
+  if (a.tokens_in + a.tokens_out > 0) {
+    parts.push(`${formatCount(a.tokens_in)} tokens in, ${formatCount(a.tokens_out)} out`);
+  }
+  if (a.cost_usd > 0) parts.push(formatUsd(a.cost_usd));
+  return parts.length > 0 ? parts.join(" · ") : null;
+}
+
 export function openCvesLabel(open: number): string {
   if (open === 0) return "No open CVEs";
   return `${open} open ${open === 1 ? "CVE" : "CVEs"}`;

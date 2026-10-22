@@ -44,7 +44,7 @@ export const advisory: AdvisoryDetail = {
       ...detail.advisories[0],
       attempts: [
         {
-          id: 7, runner: "agent", outcome: "SUCCEEDED", started_at: 1_699_000_100, finished_at: 1_699_003_600,
+          id: 7, runner: "agent", agent_seconds: 378, outcome: "SUCCEEDED", started_at: 1_699_000_100, finished_at: 1_699_003_600,
           tokens_in: 1000, tokens_out: 200, cost_usd: 0.12, patch_source: "upstream",
           patch_upstream_ref: "abc123",
           patch_diff: "--- a/x.c\n+++ b/x.c\n@@ -1 +1 @@\n-old\n+new\n",
@@ -64,5 +64,5 @@ export const stats: Stats = {
 };
 
 export const runs: Run[] = [
-  { attempt_id: 1, runner: "agent", advisory_id: "DEMO-1", image: "nginx", package: "libssl3", outcome: "SUCCEEDED", status: "PATCHED", started_at: 1_699_000_100, duration_s: 120, tokens_in: 1, tokens_out: 1, cost_usd: 0.12 },
+  { attempt_id: 1, runner: "agent", agent_seconds: 378, advisory_id: "DEMO-1", image: "nginx", package: "libssl3", outcome: "SUCCEEDED", status: "PATCHED", started_at: 1_699_000_100, duration_s: 120, tokens_in: 1, tokens_out: 1, cost_usd: 0.12 },
 ];
