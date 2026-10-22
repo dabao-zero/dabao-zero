@@ -27,7 +27,7 @@
   <p class="ts-body-large muted" style="margin-top: 8px;">No image is affected by this advisory.</p>
 {:else}
   <nav aria-label="Breadcrumb" class="ts-body-medium muted" style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px;">
-    <a class="link" href="#/">Images</a><span aria-hidden="true">/</span>
+    <a class="link" href="#/images">Images</a><span aria-hidden="true">/</span>
     <a class="link" href={imageHref(row.image)}>{row.image}</a><span aria-hidden="true">/</span>
     <span aria-current="page">{advisory.id}</span>
   </nav>

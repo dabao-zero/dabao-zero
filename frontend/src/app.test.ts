@@ -6,6 +6,7 @@ import AboutView from "./pages/AboutView.svelte";
 import CatalogView from "./pages/CatalogView.svelte";
 import FixView from "./pages/FixView.svelte";
 import ImageView from "./pages/ImageView.svelte";
+import Landing from "./pages/Landing.svelte";
 import { advisory, detail, images, runs, stats } from "./test/fixtures";
 
 afterEach(() => {
@@ -70,6 +71,43 @@ describe("fix page", () => {
     manual.affected[0].attempts[0].runner = "manual_codex";
     render(FixView, { advisory: manual, rowId: 1 });
     expect(screen.getByText(/agent-patched, run started by the maintainer/i)).toBeTruthy();
+  });
+});
+
+describe("landing page", () => {
+
+  it("explains the product, shows the swap and the honest limits", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify(images))));
+    render(Landing);
+    expect(screen.getByRole("heading", { level: 1, name: /official images you already run/i })).toBeTruthy();
+    expect(screen.getByText("FROM ghcr.io/dabao-zero/nginx:1.27")).toBeTruthy();
+    expect(screen.getByText(/no sla/i)).toBeTruthy();
+    expect(screen.getByRole("link", { name: /browse images/i }).getAttribute("href")).toBe("#/images");
+    expect(screen.getByRole("link", { name: /how it works/i }).getAttribute("href")).toBe("#/about");
+    await vi.waitFor(() => expect(screen.getAllByRole("link", { name: /nginx|python|redis/ }).length).toBe(3));
+  });
+
+  it("copies the swapped FROM line", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal("navigator", { clipboard: { writeText } });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify(images))));
+    render(Landing);
+    await fireEvent.click(screen.getByRole("button", { name: /copy the new from line/i }));
+    expect(writeText).toHaveBeenCalledWith("FROM ghcr.io/dabao-zero/nginx:1.27");
+  });
+
+  it("labels the swap as an example and does not claim images are published", () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify(images))));
+    render(Landing);
+    expect(screen.getByText(/example/i)).toBeTruthy();
+    expect(screen.queryByText(/now available|published images/i)).toBeNull();
+  });
+
+  it("still shows the page when the API is unreachable", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("down")));
+    render(Landing);
+    expect(screen.getByRole("heading", { level: 1 })).toBeTruthy();
+    await vi.waitFor(() => expect(screen.getByRole("alert").textContent).toMatch(/down/));
   });
 });
 

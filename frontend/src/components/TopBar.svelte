@@ -4,7 +4,7 @@
   import Icon from "./Icon.svelte";
   import Logo from "./Logo.svelte";
 
-  let { page }: { page: "catalog" | "image" | "fix" | "about" | "notfound" } = $props();
+  let { page }: { page: "home" | "catalog" | "image" | "fix" | "about" | "notfound" } = $props();
   let theme = $state<Theme>(currentTheme());
 
   function toggle() {
@@ -17,7 +17,7 @@
 <header class="topbar">
   <a class="wordmark" href="#/" aria-label="{SITE_NAME} home"><Logo /><span>{SITE_NAME}</span></a>
   <nav aria-label="Primary" style="display: flex; gap: 4px; flex: 1 1 auto;">
-    <a class="toplink sl" href="#/" aria-current={inImages ? "page" : undefined}>Images</a>
+    <a class="toplink sl" href="#/images" aria-current={inImages ? "page" : undefined}>Images</a>
     <a class="toplink sl" href="#/about" aria-current={page === "about" ? "page" : undefined}>About</a>
   </nav>
   <button type="button" class="icon-btn sl" onclick={toggle} aria-label={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}>

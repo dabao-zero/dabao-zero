@@ -51,6 +51,7 @@ export function openCvesLabel(open: number): string {
 }
 
 export type Route =
+  | { page: "home" }
   | { page: "catalog" }
   | { page: "image"; name: string; tab: ImageTab }
   | { page: "fix"; id: string; row: number | null }
@@ -62,7 +63,8 @@ export const IMAGE_TABS: ImageTab[] = ["overview", "tags", "fixes", "verify"];
 
 export function parseRoute(hash: string): Route {
   const parts = hash.replace(/^#\/?/, "").split("/").filter(Boolean).map(decodeURIComponent);
-  if (parts.length === 0) return { page: "catalog" };
+  if (parts.length === 0) return { page: "home" };
+  if (parts[0] === "images" && parts.length === 1) return { page: "catalog" };
   if (parts[0] === "about" && parts.length === 1) return { page: "about" };
   if (parts[0] === "images" && (parts.length === 2 || parts.length === 3)) {
     const tab = (parts[2] ?? "tags") as ImageTab;
