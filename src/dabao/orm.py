@@ -94,6 +94,26 @@ class ArtifactRow(Base):
     revoked_reason: Mapped[str | None] = mapped_column(Text, default=None)
 
 
+class ScanFindingRow(Base):
+    """What a stock scanner reported on a published artifact, with no VEX applied (ADR-0011).
+
+    `fix_state` is "fixed" when the scanner's data names a fix, "unfixed" when it does not, and
+    "unknown" when the scanner did not say. The unfixed rows are the CVEs nobody has fixed yet.
+    """
+
+    __tablename__ = "scan_findings"
+    __table_args__ = (UniqueConstraint("artifact_digest", "scanner", "advisory_id", "package"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    artifact_digest: Mapped[str] = mapped_column(ForeignKey("artifacts.digest"), index=True)
+    scanner: Mapped[str] = mapped_column(String)
+    advisory_id: Mapped[str] = mapped_column(String)
+    package: Mapped[str] = mapped_column(String)
+    severity: Mapped[str] = mapped_column(String, default="", server_default="")
+    fix_state: Mapped[str] = mapped_column(String, default="unknown", server_default="unknown")
+    created_at: Mapped[float] = mapped_column(Float)
+
+
 class FlagRow(Base):
     """Operator switches (e.g. `frozen`). Absent means off, so a missing row can never freeze."""
 

@@ -119,3 +119,38 @@ def test_0005_adds_a_nullable_agent_seconds_and_keeps_attempts(tmp_path: Path) -
     command.downgrade(cfg, "0004")
     with engine.connect() as conn:
         assert conn.execute(text("SELECT log FROM attempts WHERE id = 1")).scalar() == "old"
+
+
+def test_0006_creates_scan_findings_and_downgrades_cleanly(tmp_path: Path) -> None:
+    from sqlalchemy import inspect, text
+
+    url = f"sqlite+pysqlite:///{tmp_path / 'm6.db'}"
+    cfg = Config(str(ROOT / "alembic.ini"))
+    cfg.set_main_option("script_location", str(ROOT / "migrations"))
+    cfg.set_main_option("sqlalchemy.url", url)
+    command.upgrade(cfg, "0005")
+    engine = create_engine(url)
+    assert "scan_findings" not in inspect(engine).get_table_names()
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "INSERT INTO artifacts (digest, image, tag, stream, status, published_at)"
+                " VALUES ('sha256:a', 'nginx', '1', 'alpine', 'PUBLISHED', 1.0)"
+            )
+        )
+    command.upgrade(cfg, "head")
+    cols = {c["name"] for c in inspect(engine).get_columns("scan_findings")}
+    assert {"artifact_digest", "scanner", "advisory_id", "package", "severity", "fix_state"} <= cols
+    with engine.begin() as conn:  # a finding is unique per artifact, scanner, advisory and package
+        row = "INSERT INTO scan_findings (artifact_digest, scanner, advisory_id, package, severity,"
+        row += " fix_state, created_at) VALUES ('sha256:a', 'trivy', 'CVE-1', 'tar', 'HIGH', 'unfixed', 1.0)"
+        conn.execute(text(row))
+    import pytest
+    from sqlalchemy.exc import IntegrityError
+
+    with pytest.raises(IntegrityError), engine.begin() as conn:
+        conn.execute(text(row))
+    command.downgrade(cfg, "0005")
+    assert "scan_findings" not in inspect(engine).get_table_names()
+    with engine.connect() as conn:
+        assert conn.execute(text("SELECT COUNT(*) FROM artifacts")).scalar() == 1
