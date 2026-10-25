@@ -2,7 +2,7 @@
 
 Pure parsing is separate from the database step. Ingest is idempotent: re-running it creates
 no duplicates and never resets the status of a row that is already being worked on.
-Only the Debian stream is handled so far.
+Debian and Alpine streams are handled; the stream picks the version ordering.
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from dabao.orm import AdvisoryRow, AffectedRow
-from dabao.versions import compare_dpkg
+from dabao.versions import compare_apk, compare_dpkg
 
 DEBIAN_RELEASES = {"12": "bookworm", "11": "bullseye"}
 
@@ -79,8 +79,29 @@ def parse_debian_tracker(data: dict[str, Any], release: str = "bookworm") -> lis
     return out
 
 
-def is_vulnerable(installed: str, fixed: str | None) -> bool:
-    return fixed is None or compare_dpkg(installed, fixed) < 0
+def parse_alpine_secdb(data: dict[str, Any]) -> list[FeedRecord]:
+    """Alpine secdb JSON (one repository of one release) -> FeedRecords.
+
+    Alpine lists only vulnerabilities that have a fix, keyed by the version that fixes them;
+    version "0" means "not affected" and is skipped. A value may hold several ids in one string.
+    """
+    out: list[FeedRecord] = []
+    for item in data.get("packages", []):
+        pkg = item["pkg"]
+        for fixed, cves in pkg.get("secfixes", {}).items():
+            if fixed == "0":
+                continue
+            for entry in cves:
+                for cve in entry.split():
+                    out.append(FeedRecord(cve, (), pkg["name"], fixed))
+    return out
+
+
+_COMPARE = {"debian": compare_dpkg, "alpine": compare_apk}
+
+
+def is_vulnerable(installed: str, fixed: str | None, stream: str = "debian") -> bool:
+    return fixed is None or _COMPARE[stream](installed, fixed) < 0
 
 
 def _find_advisory(session: Session, ids: set[str]) -> AdvisoryRow | None:
@@ -93,8 +114,9 @@ def _find_advisory(session: Session, ids: set[str]) -> AdvisoryRow | None:
 def ingest(
     session: Session,
     records: list[FeedRecord],
-    images: dict[str, dict[str, str]],  # image name -> {package: installed version} (debian stream)
+    images: dict[str, dict[str, str]],  # image name -> {package: installed version}
     now: float,
+    stream: str = "debian",
 ) -> dict[str, int]:
     """Create advisories and PENDING rows for vulnerable installed packages. Returns counts."""
     counts = {"advisories": 0, "affected": 0, "skipped_not_installed": 0, "skipped_fixed": 0}
@@ -106,7 +128,7 @@ def ingest(
             if installed is None:
                 counts["skipped_not_installed"] += 1
                 continue
-            if not is_vulnerable(installed, rec.fixed_version):
+            if not is_vulnerable(installed, rec.fixed_version, stream):
                 counts["skipped_fixed"] += 1
                 continue
             if adv is None:
@@ -122,7 +144,7 @@ def ingest(
             exists = session.scalar(
                 select(AffectedRow.id).where(
                     AffectedRow.advisory_id == adv.id,
-                    AffectedRow.stream == "debian",
+                    AffectedRow.stream == stream,
                     AffectedRow.image == image,
                     AffectedRow.package == rec.package,
                     AffectedRow.version == installed,
@@ -132,7 +154,7 @@ def ingest(
                 session.add(
                     AffectedRow(
                         advisory_id=adv.id,
-                        stream="debian",
+                        stream=stream,
                         image=image,
                         package=rec.package,
                         version=installed,

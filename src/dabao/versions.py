@@ -1,7 +1,12 @@
-"""Debian package version ordering (Debian Policy 5.6.12), needed to decide whether an
-installed package predates an advisory's fixed version."""
+"""Package version ordering for the Debian and Alpine streams, needed to decide whether an
+installed package predates an advisory's fixed version.
+
+Debian: Debian Policy 5.6.12. Alpine: apk-tools' version syntax; the tests pin it to what
+`apk version -t` answers."""
 
 from __future__ import annotations
+
+import re
 
 
 def _split(version: str) -> tuple[int, str, str]:
@@ -58,3 +63,40 @@ def compare_dpkg(a: str, b: str) -> int:
     if ea != eb:
         return -1 if ea < eb else 1
     return _compare_part(ua, ub) or _compare_part(ra, rb)
+
+
+_APK_SUFFIX_RANK = {
+    "alpha": 0, "beta": 1, "pre": 2, "rc": 3, "": 4, "cvs": 5, "svn": 6, "git": 7, "hg": 8, "p": 9,
+}  # fmt: skip
+_APK_VERSION = re.compile(r"^(\d+(?:\.\d+)*)([a-z])?((?:_[a-z]+\d*)*)(?:~[0-9a-f]+)?$")
+
+
+def _apk_parts(version: str) -> tuple[list[int], str, list[tuple[int, int]], int]:
+    rel = 0
+    if "-r" in version:
+        version, _, r = version.rpartition("-r")
+        rel = int(r) if r.isdigit() else 0
+    m = _APK_VERSION.match(version)
+    if m is None:
+        raise ValueError(f"not an apk version: {version!r}")
+    numbers = [int(n) for n in m.group(1).split(".")]
+    suffixes = []
+    for s in filter(None, m.group(3).split("_")):
+        name = s.rstrip("0123456789")
+        suffixes.append((_APK_SUFFIX_RANK.get(name, 4), int(s[len(name) :] or 0)))
+    return numbers, m.group(2) or "", suffixes, rel
+
+
+def compare_apk(a: str, b: str) -> int:
+    """-1 if a < b, 0 if equal, 1 if a > b, in apk's ordering (`1.2.1-r0`, `1.0_rc1-r0`)."""
+    na, la, sa, ra = _apk_parts(a)
+    nb, lb, sb, rb = _apk_parts(b)
+    for left, right in ((na, nb), (la, lb)):
+        if left != right:
+            return -1 if left < right else 1  # type: ignore[operator]
+    none = (_APK_SUFFIX_RANK[""], 0)  # a missing suffix sorts between rc and cvs
+    for i in range(max(len(sa), len(sb))):
+        x, y = (sa[i] if i < len(sa) else none), (sb[i] if i < len(sb) else none)
+        if x != y:
+            return -1 if x < y else 1
+    return (ra > rb) - (ra < rb)
