@@ -13,6 +13,14 @@ export interface ImageSummary {
   pending: number;
   needs_human: number;
   median_time_to_patch_s: number | null;
+  unfixed: number;
+}
+
+export interface KnownUnfixed {
+  advisory_id: string;
+  package: string;
+  severity: string;
+  scanners: string[];
 }
 
 export interface Tag {
@@ -42,6 +50,7 @@ export interface Affected {
 export interface ImageDetail extends ImageSummary {
   tags: Tag[];
   advisories: Affected[];
+  known_unfixed: KnownUnfixed[];
 }
 
 export interface Gate {

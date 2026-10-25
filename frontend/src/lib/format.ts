@@ -61,9 +61,11 @@ export function agentRunSummary(a: {
   return parts.length > 0 ? parts.join(" · ") : null;
 }
 
-export function openCvesLabel(open: number): string {
-  if (open === 0) return "No open CVEs";
-  return `${open} open ${open === 1 ? "CVE" : "CVEs"}`;
+/** Counts we track plus CVEs scanners report with no fix anywhere. Never "No open CVEs" while those exist. */
+export function openCvesLabel(open: number, unfixed = 0): string {
+  const tail = unfixed > 0 ? ` · ${unfixed} unfixed` : "";
+  if (open === 0) return unfixed > 0 ? `No fixable CVEs${tail}` : "No open CVEs";
+  return `${open} open ${open === 1 ? "CVE" : "CVEs"}${tail}`;
 }
 
 export type Route =

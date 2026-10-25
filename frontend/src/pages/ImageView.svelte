@@ -58,7 +58,7 @@
     </p>
     <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; align-items: center;">
       {#each image.bases as b (b)}<span class="tag">{b}</span>{/each}
-      <StatusPill kind={image.open === 0 ? "good" : "bad"} label={openCvesLabel(image.open)} />
+      <StatusPill kind={image.open > 0 ? "bad" : image.unfixed > 0 ? "quiet" : "good"} label={openCvesLabel(image.open, image.unfixed)} />
       {#if latest}<StatusPill kind="good" label="Signed" icon />{/if}
     </div>
   </div>
@@ -94,6 +94,28 @@
 {/if}<span style="color: var(--md-sys-color-primary);">+ FROM {REGISTRY}/{image.name}:{latest.tag}</span></pre>
         {:else}
           <p class="ts-body-medium muted">Nothing to pull yet.</p>
+        {/if}
+        {#if image.known_unfixed.length > 0}
+          <h2 class="ts-title-large" style="margin: 32px 0 8px;">No fix yet</h2>
+          <p class="ts-body-medium muted" style="margin-bottom: 12px; max-width: 64ch;">
+            Stock scanners still report these on the latest image. Nobody has fixed them yet, so no rebuild or version can clear them. We list
+            them because a quiet scan is not proof that no CVE is known.
+          </p>
+          <div class="table-scroll">
+            <table class="dtable" aria-label="CVEs with no fix yet">
+              <thead><tr><th>CVE</th><th>Package</th><th>Severity</th><th>Reported by</th></tr></thead>
+              <tbody>
+                {#each image.known_unfixed as k (k.advisory_id + k.package)}
+                  <tr>
+                    <td class="mono">{k.advisory_id}</td>
+                    <td class="mono">{k.package}</td>
+                    <td>{k.severity || "unknown"}</td>
+                    <td>{k.scanners.join(", ")}</td>
+                  </tr>
+                {/each}
+              </tbody>
+            </table>
+          </div>
         {/if}
       {:else if tab === "tags"}
         {#if image.tags.length === 0}

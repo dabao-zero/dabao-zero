@@ -21,7 +21,7 @@
     {#each image.bases as base (base)}<span class="tag">{base}</span>{/each}
   </div>
   <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
-    <StatusPill kind={image.open === 0 ? "good" : "bad"} label={openCvesLabel(image.open)} />
+    <StatusPill kind={image.open > 0 ? "bad" : image.unfixed > 0 ? "quiet" : "good"} label={openCvesLabel(image.open, image.unfixed)} />
     <span class="ts-body-small muted">{image.fixed} fixed · updated {relativeTime(image.updated_at)}</span>
   </div>
 </a>

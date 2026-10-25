@@ -16,6 +16,10 @@ describe("format", () => {
     expect(openCvesLabel(0)).toBe("No open CVEs");
     expect(openCvesLabel(1)).toBe("1 open CVE");
     expect(openCvesLabel(3)).toBe("3 open CVEs");
+    // never "No open CVEs" while scanners still report CVEs nobody has fixed
+    expect(openCvesLabel(0, 2)).toBe("No fixable CVEs · 2 unfixed");
+    expect(openCvesLabel(1, 2)).toBe("1 open CVE · 2 unfixed");
+    expect(openCvesLabel(0, 0)).toBe("No open CVEs");
   });
 });
 
