@@ -131,6 +131,9 @@ DPKG_BOOKKEEPING = (
     "var/cache/ldconfig/",
     "etc/ld.so.cache",
 )
+APK_BOOKKEEPING = ("lib/apk/db/", "etc/apk/world", "var/log/apk.log", "var/cache/apk/")
+DPKG_STATUS_FILE = "var/lib/dpkg/status"
+APK_DB_FILE = "lib/apk/db/installed"
 
 
 def _merged_usr(path: str) -> str:
@@ -148,55 +151,119 @@ def _installed_versions(status: str) -> dict[str, str]:
     return out
 
 
+def _apk_packages(db: str) -> dict[str, tuple[str, list[str]]]:
+    """apk's installed database: package -> (version, files). `F:` sets the directory and each
+    `R:` names a file in it."""
+    out: dict[str, tuple[str, list[str]]] = {}
+    for block in db.split("\n\n"):
+        name = version = ""
+        files: list[str] = []
+        directory = ""
+        for line in block.splitlines():
+            if line.startswith("P:"):
+                name = line[2:]
+            elif line.startswith("V:"):
+                version = line[2:]
+            elif line.startswith("F:"):
+                directory = line[2:]
+            elif line.startswith("R:"):
+                files.append(f"{directory}/{line[2:]}" if directory else line[2:])
+        if name:
+            out[name] = (version, files)
+    return out
+
+
+@dataclass
+class _Scan:
+    changed: set[str]  # files the added layers wrote
+    texts: dict[str, str]  # package databases and file lists the added layers wrote
+    base_texts: dict[str, str]  # the same files as the base image had them
+
+
 @dataclass
 class OciDiffer:
-    """Files the build changed that no rebuilt package or dpkg bookkeeping explains.
+    """Files the build changed that no rebuilt package or package-manager bookkeeping explains.
 
-    A rebuilt package legitimately changes its own binaries, so "changed" is judged against the file
-    lists of the packages the build re-versioned (suffix `+dabao1`), plus dpkg's own state. Anything
+    A rebuilt package legitimately changes its own files, so "changed" is judged against the file
+    lists of the packages the build re-versioned, plus the package manager's own state. Anything
     else the build touched, say /etc/passwd or a binary of another package, is returned and the
-    build_diff gate fails on it.
+    build_diff gate fails on it. Works on Debian (packages marked `+dabao1`) and Alpine (packages
+    whose version differs from the base image's).
+
+    Layers beyond the base are the build's: give `added_layers` (our builds add two) or, for a base
+    with a known layer count, `base_layers`.
     """
 
     source: ImageSource
     base_layers: int = 1  # layers the base image already has (debian slim has one)
-    ignore_prefixes: tuple[str, ...] = ("tmp/dabao-debs",)  # build staging, removed again
+    added_layers: int | None = None  # overrides base_layers: the last N layers are the build's
+    ignore_prefixes: tuple[str, ...] = ("tmp/dabao-debs", "tmp/dabao-apk")  # staging, removed again
     rebuilt_marker: str = "+dabao1"
     bookkeeping: tuple[str, ...] = DPKG_BOOKKEEPING
 
-    def changed_files(self, before_digest: str, after_digest: str) -> list[str] | None:
-        layout = self.source.layout(after_digest)
+    def _read(self, digest: str) -> _Scan | None:
+        layout = self.source.layout(digest)
         if layout is None:
             return None
         try:
             index = json.loads((layout / "index.json").read_text())
             manifest = json.loads(_blob(layout, index["manifests"][0]["digest"]).read_text())
-            changed: set[str] = set()
-            texts: dict[str, str] = {}
-            for layer in manifest["layers"][self.base_layers :]:
+            layers = manifest["layers"]
+            n_base = len(layers) - self.added_layers if self.added_layers else self.base_layers
+            scan = _Scan(set(), {}, {})
+            for i, layer in enumerate(layers):
+                added = i >= n_base
                 with tarfile.open(_blob(layout, layer["digest"])) as t:
                     for member in t:
                         name = member.name.removeprefix("./")
                         if member.isdir() or "/.wh." in f"/{name}" or name.startswith(".wh."):
                             continue
-                        if name.startswith(self.ignore_prefixes):
-                            continue
-                        changed.add(name)
-                        is_meta = name == "var/lib/dpkg/status" or name.endswith(".list")
-                        if is_meta and name.startswith("var/lib/dpkg/"):
+                        is_db = (
+                            name in (DPKG_STATUS_FILE, APK_DB_FILE)
+                            or (name.startswith("var/lib/dpkg/") and name.endswith(".list"))
+                        )  # fmt: skip
+                        if is_db:
                             fh = t.extractfile(member)
-                            texts[name] = fh.read().decode(errors="replace") if fh else ""
-            versions = _installed_versions(texts.get("var/lib/dpkg/status", ""))
-            explained: set[str] = set()
-            for pkg, version in versions.items():
-                if version.endswith(self.rebuilt_marker):
-                    listing = texts.get(f"var/lib/dpkg/info/{pkg}.list", "")
-                    explained |= {_merged_usr(ln) for ln in listing.splitlines()}
-            return sorted(
-                f for f in changed if f not in explained and not f.startswith(self.bookkeeping)
-            )
+                            text = fh.read().decode(errors="replace") if fh else ""
+                            (scan.texts if added else scan.base_texts)[name] = text
+                        if added and not name.startswith(self.ignore_prefixes):
+                            scan.changed.add(name)
+            return scan
         except (OSError, KeyError, IndexError, tarfile.TarError, ValueError):
             return None
+
+    def _rebuilt(self, scan: _Scan) -> dict[str, tuple[str, list[str]]]:
+        """Rebuilt package -> (version, files), for whichever package manager the image uses."""
+        if APK_DB_FILE in scan.texts:
+            before = _apk_packages(scan.base_texts.get(APK_DB_FILE, ""))
+            return {
+                n: (v, files)
+                for n, (v, files) in _apk_packages(scan.texts[APK_DB_FILE]).items()
+                if before.get(n, ("", []))[0] != v
+            }
+        out: dict[str, tuple[str, list[str]]] = {}
+        for pkg, version in _installed_versions(scan.texts.get(DPKG_STATUS_FILE, "")).items():
+            if version.endswith(self.rebuilt_marker):
+                listing = scan.texts.get(f"var/lib/dpkg/info/{pkg}.list", "")
+                out[pkg] = (version, [_merged_usr(ln) for ln in listing.splitlines()])
+        return out
+
+    def changed_files(self, before_digest: str, after_digest: str) -> list[str] | None:
+        scan = self._read(after_digest)
+        if scan is None:
+            return None
+        explained = {f for _, files in self._rebuilt(scan).values() for f in files}
+        bookkeeping = APK_BOOKKEEPING if APK_DB_FILE in scan.texts else self.bookkeeping
+        return sorted(
+            f for f in scan.changed if f not in explained and not f.startswith(bookkeeping)
+        )
+
+    def rebuilt_packages(self, digest: str) -> list[tuple[str, str]] | None:
+        """(binary package, version) of what the build re-versioned: what a VEX statement names."""
+        scan = self._read(digest)
+        if scan is None:
+            return None
+        return sorted((n, v) for n, (v, _) in self._rebuilt(scan).items())
 
 
 @dataclass

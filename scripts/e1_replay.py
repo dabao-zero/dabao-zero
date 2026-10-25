@@ -102,12 +102,14 @@ def main() -> int:
     adapter = DebianAdapter(BASE, args.work, builder=args.builder)
     source = ImageSource(BASE.digest, BASE.image, adapter.archives)
     scanners = (TrivyScanner(source), GrypeScanner(source))
+    differ = OciDiffer(source)
     pipeline = Pipeline(
         agent=fakes.FakeAgentRunner(),  # replaced by the bundle in import_bundle
         adapter=adapter,
         scanners=scanners,
         suite_runner=SmokeSuiteRunner(source, SMOKE, builder=args.builder),
-        differ=OciDiffer(source),
+        differ=differ,
+        rebuilt=lambda digest: differ.rebuilt_packages(digest) or [],
         registry=fakes.FakeRegistry(),
         signer=fakes.FakeSigner(),
         clock=Clock(),
