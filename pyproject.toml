@@ -38,6 +38,7 @@ testpaths = ["tests"]
 markers = [
   "integration: needs Docker or other real infrastructure",
   "docker: builds real images; slow, needs Docker, buildx and network (make test-docker)",
+  "scanners: needs trivy and grype and network; the VEX canary (make test-scanners)",
 ]
 addopts = "-ra --strict-markers"
 

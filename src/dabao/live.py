@@ -11,7 +11,7 @@ import subprocess
 import tarfile
 import tempfile
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
@@ -55,11 +55,18 @@ class TrivyScanner:
     source: ImageSource
     runner: Runner = _run
     name: str = "trivy"
+    vex_path: Path | None = None
+
+    def with_vex(self, path: Path) -> TrivyScanner:
+        """The same scanner, told to apply an OpenVEX document (ADR-0010). This one is unchanged."""
+        return replace(self, vex_path=path)
 
     def scan(self, image_digest: str) -> list[Finding]:
         layout = self.source.layout(image_digest)
         target = ["--input", str(layout)] if layout else [self.source.reference(image_digest)]
         cmd = ["trivy", "image", "--quiet", "--format", "json", "--scanners", "vuln"]
+        if self.vex_path is not None:
+            cmd += ["--vex", str(self.vex_path)]
         res = self.runner([*cmd, "--pkg-types", "os", *target])
         if res.returncode != 0:
             raise _fail("trivy", res)
@@ -86,11 +93,19 @@ class GrypeScanner:
     source: ImageSource
     runner: Runner = _run
     name: str = "grype"
+    vex_path: Path | None = None
+
+    def with_vex(self, path: Path) -> GrypeScanner:
+        """The same scanner, told to apply an OpenVEX document (ADR-0010). This one is unchanged."""
+        return replace(self, vex_path=path)
 
     def scan(self, image_digest: str) -> list[Finding]:
         layout = self.source.layout(image_digest)
         target = f"oci-dir:{layout}" if layout else self.source.reference(image_digest)
-        res = self.runner(["grype", target, "-o", "json", "-q"])
+        cmd = ["grype", target, "-o", "json", "-q"]
+        if self.vex_path is not None:
+            cmd += ["--vex", str(self.vex_path)]
+        res = self.runner(cmd)
         if res.returncode != 0:
             raise _fail("grype", res)
         data = json.loads(res.stdout or b"{}")
