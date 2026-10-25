@@ -1,0 +1,564 @@
+{
+  "scanned_at": "2026-10-25T09:33:06+00:00",
+  "versions": {
+    "trivy": "Version: 0.70.0",
+    "grype": "0.121.0"
+  },
+  "rows": [
+    {
+      "image": "nginx",
+      "tag": "latest",
+      "base": "debian 13.7",
+      "digest": "sha256:4c41e2d0a3a55b325ed572cd0200bdb72af1433c3daa2bca6ef8eea68ce504a2",
+      "trivy": {
+        "total": 391,
+        "fixable": 55,
+        "unfixable": 336,
+        "fixable_high": 1,
+        "critical_or_high": 60
+      },
+      "grype": {
+        "total": 329,
+        "fixable": 1,
+        "unfixable": 328,
+        "fixable_high": 0,
+        "critical_or_high": 106
+      }
+    },
+    {
+      "image": "nginx",
+      "tag": "alpine",
+      "base": "alpine 3.24.3",
+      "digest": "sha256:a3554c0d0b48177b1413c26e01f695334428020d9df01243fbae3e11cfd17417",
+      "trivy": {
+        "total": 1,
+        "fixable": 1,
+        "unfixable": 0,
+        "fixable_high": 1,
+        "critical_or_high": 1
+      },
+      "grype": {
+        "total": 5,
+        "fixable": 1,
+        "unfixable": 4,
+        "fixable_high": 1,
+        "critical_or_high": 2
+      }
+    },
+    {
+      "image": "postgres",
+      "tag": "latest",
+      "base": "debian 13.7",
+      "digest": "sha256:edb0c08dc33befd0262ab3b5cf1c4f3f8cfd8b09e88c05b45adee29d6761ddb6",
+      "trivy": {
+        "total": 313,
+        "fixable": 0,
+        "unfixable": 313,
+        "fixable_high": 0,
+        "critical_or_high": 62
+      },
+      "grype": {
+        "total": 308,
+        "fixable": 0,
+        "unfixable": 308,
+        "fixable_high": 0,
+        "critical_or_high": 86
+      }
+    },
+    {
+      "image": "postgres",
+      "tag": "alpine",
+      "base": "alpine 3.24.3",
+      "digest": "sha256:898c60cb390d1085bc97bdd6a1ae968757421df394b071848b52b1c09c89d6a5",
+      "trivy": {
+        "total": 1,
+        "fixable": 1,
+        "unfixable": 0,
+        "fixable_high": 1,
+        "critical_or_high": 1
+      },
+      "grype": {
+        "total": 4,
+        "fixable": 1,
+        "unfixable": 3,
+        "fixable_high": 1,
+        "critical_or_high": 1
+      }
+    },
+    {
+      "image": "redis",
+      "tag": "latest",
+      "base": "debian 13.7",
+      "digest": "sha256:97ec88159e6d7cfb5ddef9015386087d58a912de80112f06ebdfa78fa5989901",
+      "trivy": {
+        "total": 162,
+        "fixable": 0,
+        "unfixable": 162,
+        "fixable_high": 0,
+        "critical_or_high": 43
+      },
+      "grype": {
+        "total": 157,
+        "fixable": 0,
+        "unfixable": 157,
+        "fixable_high": 0,
+        "critical_or_high": 54
+      }
+    },
+    {
+      "image": "redis",
+      "tag": "alpine",
+      "base": "alpine 3.23.7",
+      "digest": "sha256:0bf6577d7774e592b29d093e3ac9390eb91e13d72c21e506afce736de5e0eeb0",
+      "trivy": {
+        "total": 0,
+        "fixable": 0,
+        "unfixable": 0,
+        "fixable_high": 0,
+        "critical_or_high": 0
+      },
+      "grype": {
+        "total": 3,
+        "fixable": 0,
+        "unfixable": 3,
+        "fixable_high": 0,
+        "critical_or_high": 0
+      }
+    },
+    {
+      "image": "python",
+      "tag": "latest",
+      "base": "debian 13.7",
+      "digest": "sha256:67ee282bdbe5ece1e38ea94fa68f1420e969e6176e6c826b9acc931055011bfb",
+      "trivy": {
+        "total": 3547,
+        "fixable": 61,
+        "unfixable": 3486,
+        "fixable_high": 2,
+        "critical_or_high": 453
+      },
+      "grype": {
+        "total": 2631,
+        "fixable": 7,
+        "unfixable": 2624,
+        "fixable_high": 1,
+        "critical_or_high": 520
+      }
+    },
+    {
+      "image": "python",
+      "tag": "alpine",
+      "base": "alpine 3.24.3",
+      "digest": "sha256:d44b1254cb92329418d164b22b20d86bbd3869d48e80e09e476531a409a728bb",
+      "trivy": {
+        "total": 0,
+        "fixable": 0,
+        "unfixable": 0,
+        "fixable_high": 0,
+        "critical_or_high": 0
+      },
+      "grype": {
+        "total": 3,
+        "fixable": 0,
+        "unfixable": 3,
+        "fixable_high": 0,
+        "critical_or_high": 0
+      }
+    },
+    {
+      "image": "node",
+      "tag": "latest",
+      "base": "debian 13.7",
+      "digest": "sha256:a98e6fda54fdbb22d4238054cca9a2a113bcd1191c09193a535aae22f400aa8e",
+      "trivy": {
+        "total": 3500,
+        "fixable": 61,
+        "unfixable": 3439,
+        "fixable_high": 2,
+        "critical_or_high": 445
+      },
+      "grype": {
+        "total": 2584,
+        "fixable": 7,
+        "unfixable": 2577,
+        "fixable_high": 1,
+        "critical_or_high": 512
+      }
+    },
+    {
+      "image": "node",
+      "tag": "alpine",
+      "base": "alpine 3.24.3",
+      "digest": "sha256:40cd011b55415bc894e45b02fdd5a5dfde056921b7d23a64c74f80497af48797",
+      "trivy": {
+        "total": 0,
+        "fixable": 0,
+        "unfixable": 0,
+        "fixable_high": 0,
+        "critical_or_high": 0
+      },
+      "grype": {
+        "total": 3,
+        "fixable": 0,
+        "unfixable": 3,
+        "fixable_high": 0,
+        "critical_or_high": 0
+      }
+    },
+    {
+      "image": "httpd",
+      "tag": "latest",
+      "base": "debian 13.7",
+      "digest": "sha256:a30cd4cd57f3f3c3be9b2d16384d2488839996bb14c67df2b51f1ecbb3e584a1",
+      "trivy": {
+        "total": 263,
+        "fixable": 1,
+        "unfixable": 262,
+        "fixable_high": 1,
+        "critical_or_high": 54
+      },
+      "grype": {
+        "total": 258,
+        "fixable": 1,
+        "unfixable": 257,
+        "fixable_high": 0,
+        "critical_or_high": 85
+      }
+    },
+    {
+      "image": "httpd",
+      "tag": "alpine",
+      "base": "alpine 3.24.3",
+      "digest": "sha256:070da7661f0be8a05430b2c125c0cde9e53176b4048c813024021969a0e3893c",
+      "trivy": {
+        "total": 1,
+        "fixable": 1,
+        "unfixable": 0,
+        "fixable_high": 1,
+        "critical_or_high": 1
+      },
+      "grype": {
+        "total": 7,
+        "fixable": 1,
+        "unfixable": 6,
+        "fixable_high": 1,
+        "critical_or_high": 3
+      }
+    },
+    {
+      "image": "memcached",
+      "tag": "latest",
+      "base": "debian 13.7",
+      "digest": "sha256:ab65f39bfa5b1e31bff3bdccfd48af85fee6fdcbf0eb877175fcb170a4e1bd2f",
+      "trivy": {
+        "total": 165,
+        "fixable": 0,
+        "unfixable": 165,
+        "fixable_high": 0,
+        "critical_or_high": 43
+      },
+      "grype": {
+        "total": 160,
+        "fixable": 0,
+        "unfixable": 160,
+        "fixable_high": 0,
+        "critical_or_high": 57
+      }
+    },
+    {
+      "image": "memcached",
+      "tag": "alpine",
+      "base": "alpine 3.24.3",
+      "digest": "sha256:6a089e37cbb8acd75c80c6c0667fe57ec54db68782fb1b3afb1d0eb265e50070",
+      "trivy": {
+        "total": 0,
+        "fixable": 0,
+        "unfixable": 0,
+        "fixable_high": 0,
+        "critical_or_high": 0
+      },
+      "grype": {
+        "total": 3,
+        "fixable": 0,
+        "unfixable": 3,
+        "fixable_high": 0,
+        "critical_or_high": 0
+      }
+    },
+    {
+      "image": "haproxy",
+      "tag": "latest",
+      "base": "debian 13.7",
+      "digest": "sha256:abc6a6dd00d67b796f593eb11473f61fe7ba5e29c4020fa5fb7bc6cf552e7ba9",
+      "trivy": {
+        "total": 162,
+        "fixable": 0,
+        "unfixable": 162,
+        "fixable_high": 0,
+        "critical_or_high": 43
+      },
+      "grype": {
+        "total": 157,
+        "fixable": 0,
+        "unfixable": 157,
+        "fixable_high": 0,
+        "critical_or_high": 54
+      }
+    },
+    {
+      "image": "haproxy",
+      "tag": "alpine",
+      "base": "alpine 3.24.3",
+      "digest": "sha256:2caaf8b1a1ef67f3f1ea9b721f2821675d3ba4500fb518e23884fecb93e8dbaa",
+      "trivy": {
+        "total": 0,
+        "fixable": 0,
+        "unfixable": 0,
+        "fixable_high": 0,
+        "critical_or_high": 0
+      },
+      "grype": {
+        "total": 3,
+        "fixable": 0,
+        "unfixable": 3,
+        "fixable_high": 0,
+        "critical_or_high": 0
+      }
+    },
+    {
+      "image": "rabbitmq",
+      "tag": "latest",
+      "base": "ubuntu 26.04",
+      "digest": "sha256:71be6ca71cd3ad92f29b354ec381b1ee587894aaaac21f185b8cf43fb50d3feb",
+      "trivy": {
+        "total": 43,
+        "fixable": 1,
+        "unfixable": 42,
+        "fixable_high": 0,
+        "critical_or_high": 0
+      },
+      "grype": {
+        "total": 101,
+        "fixable": 3,
+        "unfixable": 98,
+        "fixable_high": 0,
+        "critical_or_high": 0
+      }
+    },
+    {
+      "image": "rabbitmq",
+      "tag": "alpine",
+      "base": "alpine 3.24.3",
+      "digest": "sha256:5b70d54d53d0ce9558b84ad93cb237d06fa2e8c57115fa0ff7223b9eaffa44ed",
+      "trivy": {
+        "total": 0,
+        "fixable": 0,
+        "unfixable": 0,
+        "fixable_high": 0,
+        "critical_or_high": 0
+      },
+      "grype": {
+        "total": 3,
+        "fixable": 0,
+        "unfixable": 3,
+        "fixable_high": 0,
+        "critical_or_high": 0
+      }
+    },
+    {
+      "image": "golang",
+      "tag": "latest",
+      "base": "debian 13.7",
+      "digest": "sha256:f20d83a83e18dbd2a4714b8ffd4b30b287b6243962dd75608e86abcc63ba4efc",
+      "trivy": {
+        "total": 1972,
+        "fixable": 1,
+        "unfixable": 1971,
+        "fixable_high": 1,
+        "critical_or_high": 149
+      },
+      "grype": {
+        "total": 1118,
+        "fixable": 1,
+        "unfixable": 1117,
+        "fixable_high": 0,
+        "critical_or_high": 190
+      }
+    },
+    {
+      "image": "golang",
+      "tag": "alpine",
+      "base": "alpine 3.24.3",
+      "digest": "sha256:b8c9b82affbbb82a020bbcf998dad2ba9516944ac7e883524642a481a9505e9c",
+      "trivy": {
+        "total": 0,
+        "fixable": 0,
+        "unfixable": 0,
+        "fixable_high": 0,
+        "critical_or_high": 0
+      },
+      "grype": {
+        "total": 3,
+        "fixable": 0,
+        "unfixable": 3,
+        "fixable_high": 0,
+        "critical_or_high": 0
+      }
+    },
+    {
+      "image": "php",
+      "tag": "latest",
+      "base": "debian 13.7",
+      "digest": "sha256:635a4b998025ab269194639a5549c6fdcd9b4f88ec8cd761b092de8653d40663",
+      "trivy": {
+        "total": 1797,
+        "fixable": 1,
+        "unfixable": 1796,
+        "fixable_high": 1,
+        "critical_or_high": 119
+      },
+      "grype": {
+        "total": 943,
+        "fixable": 1,
+        "unfixable": 942,
+        "fixable_high": 0,
+        "critical_or_high": 144
+      }
+    },
+    {
+      "image": "php",
+      "tag": "alpine",
+      "base": "alpine 3.24.3",
+      "digest": "sha256:e899a75c775804e5466dbd9c96b31f8b6c6ae2ddb053a8466223a0c32992ff8e",
+      "trivy": {
+        "total": 1,
+        "fixable": 1,
+        "unfixable": 0,
+        "fixable_high": 1,
+        "critical_or_high": 1
+      },
+      "grype": {
+        "total": 8,
+        "fixable": 1,
+        "unfixable": 7,
+        "fixable_high": 1,
+        "critical_or_high": 2
+      }
+    },
+    {
+      "image": "ruby",
+      "tag": "latest",
+      "base": "debian 13.7",
+      "digest": "sha256:e7e33621dd8ac85cdfa472b9c13ac1ec03cedf9e15b79c696891cf11226980c6",
+      "trivy": {
+        "total": 3500,
+        "fixable": 61,
+        "unfixable": 3439,
+        "fixable_high": 2,
+        "critical_or_high": 445
+      },
+      "grype": {
+        "total": 2584,
+        "fixable": 7,
+        "unfixable": 2577,
+        "fixable_high": 1,
+        "critical_or_high": 512
+      }
+    },
+    {
+      "image": "ruby",
+      "tag": "alpine",
+      "base": "alpine 3.24.3",
+      "digest": "sha256:ca8b5f9a8b6533925dfa355f7fbadb64cbfd801cb7e8fa87260ef8a2eae964cc",
+      "trivy": {
+        "total": 0,
+        "fixable": 0,
+        "unfixable": 0,
+        "fixable_high": 0,
+        "critical_or_high": 0
+      },
+      "grype": {
+        "total": 3,
+        "fixable": 0,
+        "unfixable": 3,
+        "fixable_high": 0,
+        "critical_or_high": 0
+      }
+    },
+    {
+      "image": "mariadb",
+      "tag": "latest",
+      "base": "ubuntu 26.04",
+      "digest": "sha256:0e4bb0f339feba125d1154fbacd36c16ec8518f52e44e1f82ecec7d6771caf39",
+      "trivy": {
+        "total": 53,
+        "fixable": 1,
+        "unfixable": 52,
+        "fixable_high": 0,
+        "critical_or_high": 0
+      },
+      "grype": {
+        "total": 663,
+        "fixable": 3,
+        "unfixable": 660,
+        "fixable_high": 0,
+        "critical_or_high": 0
+      }
+    },
+    {
+      "image": "mariadb",
+      "tag": "alpine",
+      "error": "no such tag"
+    },
+    {
+      "image": "mysql",
+      "tag": "latest",
+      "base": "oracle 9.8",
+      "digest": "sha256:f51c9c01c16b0eb5d81bb70ab7e7fcb3b96abc6a54114be3a94e8e569cae7815",
+      "trivy": {
+        "total": 0,
+        "fixable": 0,
+        "unfixable": 0,
+        "fixable_high": 0,
+        "critical_or_high": 0
+      },
+      "grype": {
+        "total": 0,
+        "fixable": 0,
+        "unfixable": 0,
+        "fixable_high": 0,
+        "critical_or_high": 0
+      }
+    },
+    {
+      "image": "mysql",
+      "tag": "alpine",
+      "error": "no such tag"
+    },
+    {
+      "image": "eclipse-temurin",
+      "tag": "latest",
+      "base": "ubuntu 26.04",
+      "digest": "sha256:2d5d5e9b533342a565907c84f47a2ec298c40cde7b13a3ca85d4950fa456a641",
+      "trivy": {
+        "total": 57,
+        "fixable": 1,
+        "unfixable": 56,
+        "fixable_high": 0,
+        "critical_or_high": 0
+      },
+      "grype": {
+        "total": 350,
+        "fixable": 3,
+        "unfixable": 347,
+        "fixable_high": 0,
+        "critical_or_high": 0
+      }
+    },
+    {
+      "image": "eclipse-temurin",
+      "tag": "alpine",
+      "error": "no such tag"
+    }
+  ]
+}
