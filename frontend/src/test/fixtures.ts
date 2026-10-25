@@ -15,6 +15,7 @@ export const summary = (over: Partial<ImageSummary> = {}): ImageSummary => ({
   pending: 0,
   needs_human: 0,
   median_time_to_patch_s: 3600,
+  unfixed: 0,
   ...over,
 });
 
@@ -26,6 +27,7 @@ export const images: ImageSummary[] = [
 
 export const detail: ImageDetail = {
   ...summary(),
+  known_unfixed: [],
   tags: [
     { digest: "sha256:" + "a".repeat(64), tag: "1.22.0-1-dabao2", stream: "debian", status: "PUBLISHED", published_at: 1_700_000_000, revoked_at: null, revoked_reason: null, open_cves: 1, fixed_cves: 2 },
     { digest: "sha256:" + "b".repeat(64), tag: "1.22.0-1-dabao1", stream: "debian", status: "REVOKED", published_at: 1_690_000_000, revoked_at: 1_695_000_000, revoked_reason: "bad build", open_cves: 2, fixed_cves: 1 },

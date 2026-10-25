@@ -7,7 +7,8 @@ import CatalogView from "./pages/CatalogView.svelte";
 import FixView from "./pages/FixView.svelte";
 import ImageView from "./pages/ImageView.svelte";
 import Landing from "./pages/Landing.svelte";
-import { advisory, detail, images, runs, stats } from "./test/fixtures";
+import ImageCard from "./components/ImageCard.svelte";
+import { advisory, detail, images, runs, stats, summary } from "./test/fixtures";
 
 afterEach(() => {
   cleanup();
@@ -67,6 +68,32 @@ describe("catalog", () => {
   it("offers a pull command under the registry", () => {
     render(CatalogView, { images });
     expect(screen.getByText(/docker pull ghcr\.io\/dabao-zero\/nginx:1\.22\.0-1-dabao1/)).toBeTruthy();
+  });
+});
+
+describe("known-unfixed CVEs", () => {
+  const unfixed = [
+    { advisory_id: "CVE-2025-60876", package: "busybox", severity: "MEDIUM", scanners: ["grype"] },
+    { advisory_id: "CVE-2026-92392", package: "curl", severity: "HIGH", scanners: ["grype", "trivy"] },
+  ];
+
+  it("never says no open CVEs for an image that has some", () => {
+    render(ImageCard, { image: summary({ open: 0, unfixed: 2 }) });
+    expect(screen.queryByText("No open CVEs")).toBeNull();
+    expect(screen.getByText("No fixable CVEs · 2 unfixed")).toBeTruthy();
+  });
+
+  it("lists them on the image page with their scanners", () => {
+    render(ImageView, { image: { ...detail, open: 0, unfixed: 2, known_unfixed: unfixed }, tab: "overview" });
+    expect(screen.getByRole("heading", { name: /no fix yet/i })).toBeTruthy();
+    expect(screen.getByText("CVE-2025-60876")).toBeTruthy();
+    expect(screen.getByText("grype, trivy")).toBeTruthy();
+    expect(screen.getByText(/a quiet scan is not proof/i)).toBeTruthy();
+  });
+
+  it("says nothing about unfixed CVEs when there are none", () => {
+    render(ImageView, { image: detail, tab: "overview" });
+    expect(screen.queryByRole("heading", { name: /no fix yet/i })).toBeNull();
   });
 });
 

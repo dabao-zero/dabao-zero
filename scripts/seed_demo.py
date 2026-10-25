@@ -21,6 +21,7 @@ from dabao.orm import (
     AttemptRow,
     ImageRow,
     PatchRow,
+    ScanFindingRow,
 )
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -173,6 +174,30 @@ def main() -> None:
                     revoked_reason=reason,
                 )
             )
+        # python is fully fixed, but scanners still report two CVEs nobody has fixed (fake ids)
+        live = [
+            (NOW - ago, n)
+            for n, (image, _tag, _stream, ago, status, _reason) in enumerate(ARTIFACTS, start=1)
+            if image == "python" and status == "PUBLISHED"
+        ]
+        digest = f"sha256:demo{max(live)[1]:060d}"
+        s.flush()
+        for scanner in ("grype", "trivy"):
+            for adv, pkg, sev in (
+                ("DEMO-9001", "libdemo1", "MEDIUM"),
+                ("DEMO-9002", "demo-tools", "LOW"),
+            ):
+                s.add(
+                    ScanFindingRow(
+                        artifact_digest=digest,
+                        scanner=scanner,
+                        advisory_id=adv,
+                        package=pkg,
+                        severity=sev,
+                        fix_state="unfixed",
+                        created_at=NOW,
+                    )  # fmt: skip
+                )
         s.commit()
     print(f"seeded demo data into {url}")
 

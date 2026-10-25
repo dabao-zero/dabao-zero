@@ -43,3 +43,7 @@ def test_seed_produces_a_realistic_catalog_and_is_idempotent(
     stalled = client.get("/v1/advisories/DEMO-0003").json()["affected"][0]["attempts"][0]
     assert [g["name"] for g in stalled["gates"] if not g["passed"]] == ["scanners_clear"]
     assert client.get("/v1/stats").json()["fixes"] == 13
+    # python is fully fixed yet scanners still list two CVEs with no fix: the demo shows it honestly
+    assert images["python"]["unfixed"] == 2 and images["nginx"]["unfixed"] == 0
+    known = client.get("/v1/images/python").json()["known_unfixed"]
+    assert [k["advisory_id"] for k in known] == ["DEMO-9001", "DEMO-9002"]
