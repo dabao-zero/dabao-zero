@@ -54,9 +54,10 @@ for those, rebuilding with Debian's own fixed packages is the whole remedy.
 `nginx`, `postgres`, `httpd` and `php` show 1 each, and each is fixable. Those four are the first real Alpine targets:
 a rebuilt package at the fixed version should take them to zero with no VEX (DAB-75).
 
-**Grype shows a few more, none from Alpine's own feed.** Every Alpine image shows 3 to 8 findings in Grype, and
-almost all are `not fixed` matches from the NVD by CPE (for example `busybox` `CVE-2025-60876` on `redis:alpine`)
-that Alpine's advisory data does not list. A zero-tolerance user running Grype with its defaults will therefore see
+**Grype shows a few more, and on the image I inspected they are not from Alpine's own feed.** Every Alpine image
+shows 3 to 8 findings in Grype. On `redis:alpine` all three are `not fixed` matches from the NVD by CPE (`busybox`,
+`busybox-binsh` and `ssl_client` for `CVE-2025-60876`) that Alpine's advisory data does not list. I did not inspect the
+others; the four images with one fixable finding presumably also carry Alpine-feed matches. A zero-tolerance user running Grype with its defaults will therefore see
 them. Whether to say so, ignore them with Grype's CPE settings, or ask Alpine about them is open; the ledger list from
 DAB-77 should carry them either way.
 
