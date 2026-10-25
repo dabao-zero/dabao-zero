@@ -76,6 +76,26 @@ def parse_apk_installed(text: str) -> dict[str, str]:
     return out
 
 
+def parse_apk_origins(text: str) -> dict[str, str]:
+    """Source packages in an apk database: origin name -> version.
+
+    Advisory feeds name the source package (`brotli`), while the database lists binaries
+    (`brotli-libs`); every binary of one origin carries the same version."""
+    out: dict[str, str] = {}
+    for block in text.split("\n\n"):
+        name = ver = origin = None
+        for line in block.splitlines():
+            if line.startswith("P:"):
+                name = line[2:].strip()
+            elif line.startswith("V:"):
+                ver = line[2:].strip()
+            elif line.startswith("o:"):
+                origin = line[2:].strip()
+        if name and ver:
+            out[origin or name] = ver
+    return out
+
+
 def inventory(regctl: Regctl, image: str) -> tuple[str, dict[str, str]]:
     """(stream, packages) for an image; stream is 'debian' (dpkg) or 'alpine' (apk)."""
     dpkg = regctl.get_file(image, DPKG_STATUS)

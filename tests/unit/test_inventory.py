@@ -13,6 +13,7 @@ from dabao.inventory import (
     diff_inventories,
     inventory,
     parse_apk_installed,
+    parse_apk_origins,
     parse_dpkg_status,
 )
 
@@ -81,3 +82,11 @@ def test_diff_inventories() -> None:
     d = diff_inventories({"a": "1", "b": "1", "c": "1"}, {"a": "1", "b": "2", "d": "1"})
     assert d.added == {"d": "1"} and d.removed == {"c": "1"} and d.changed == {"b": ("1", "2")}
     assert diff_inventories({"a": "1"}, {"a": "1"}).empty
+
+
+def test_apk_origins_map_the_source_package_to_its_version() -> None:
+    origins = parse_apk_origins((FIX / "apk_origins.txt").read_text())
+    assert origins["musl"] == "1.2.5-r0"  # origin of itself
+    assert origins["no-origin-line"] == "1.0-r0"  # no o: line means the package is its own origin
+    assert origins["brotli"] == "1.2.0-r1"  # brotli and brotli-libs share one origin
+    assert "brotli-libs" not in origins

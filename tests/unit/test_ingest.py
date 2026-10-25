@@ -11,6 +11,7 @@ from dabao.ingest import (
     canonical_id,
     ingest,
     is_vulnerable,
+    parse_alpine_secdb,
     parse_debian_tracker,
     parse_osv,
 )
@@ -114,3 +115,39 @@ def test_alias_resolution_attaches_new_ids_to_the_existing_advisory(
         assert [a.id for a in advisories] == ["CVE-2099-0001"]
         assert set(advisories[0].aliases.split("\n")) == {"DSA-9999-1", "GHSA-zzzz"}
         assert {r.package for r in s.scalars(select(AffectedRow))} == {"nginx", "libssl3"}
+
+
+def secdb() -> list[FeedRecord]:
+    return parse_alpine_secdb(json.loads((FIX / "alpine_secdb.json").read_text()))
+
+
+def test_parse_alpine_secdb_lists_each_cve_with_the_version_that_fixes_it() -> None:
+    got = {(r.id, r.package, r.fixed_version) for r in secdb()}
+    assert got == {
+        ("CVE-2026-111497", "brotli", "1.2.1-r0"),
+        ("CVE-2020-8927", "brotli", "1.0.9-r0"),
+        ("CVE-2099-0100", "busybox", "1.37.0-r31"),  # one string can hold several ids
+        ("CVE-2099-0101", "busybox", "1.37.0-r31"),
+        ("CVE-2099-0102", "busybox", "1.37.0-r31"),
+    }  # version "0" means not affected and is skipped
+
+
+def test_ingest_for_alpine_compares_apk_versions_and_tags_the_stream(
+    factory: sessionmaker[Session],
+) -> None:
+    images = {
+        "nginx": {"brotli": "1.2.0-r1", "busybox": "1.37.0-r31"}
+    }  # brotli is behind, busybox is not
+    with factory() as s:
+        counts = ingest(s, secdb(), images, now=1.0, stream="alpine")
+        rows = s.scalars(select(AffectedRow)).all()
+    assert counts["affected"] == 1 and counts["skipped_fixed"] == 4
+    assert [(r.advisory_id, r.stream, r.package, r.version) for r in rows] == [
+        ("CVE-2026-111497", "alpine", "brotli", "1.2.0-r1")
+    ]  # 1.0.9-r0 is older than what is installed, so CVE-2020-8927 is already fixed
+
+
+def test_debian_ingest_is_unchanged_by_the_stream_argument(factory: sessionmaker[Session]) -> None:
+    with factory() as s:
+        ingest(s, osv(), IMAGES, now=1.0)
+        assert {r.stream for r in s.scalars(select(AffectedRow))} == {"debian"}
