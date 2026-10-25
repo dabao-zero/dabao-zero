@@ -11,6 +11,7 @@ import logging
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from enum import StrEnum
+from pathlib import Path
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
@@ -77,6 +78,9 @@ class Pipeline:
     limits: Limits = field(default_factory=Limits)
     owner: str = "orchestrator-1"
     runner: str = "agent"  # recorded on every attempt; "manual_codex" for imported bundles
+    # ADR-0010: which binary packages the build rebuilt, and where the gate may write a VEX.
+    rebuilt: Callable[[str], Sequence[tuple[str, str]]] | None = None
+    vex_dir: Path | None = None
 
 
 class RecordingScanner:
@@ -92,6 +96,10 @@ class RecordingScanner:
         found = self._inner.scan(image_digest)
         self.results[image_digest] = found
         return found
+
+    def with_vex(self, path: Path) -> Scanner:
+        """The inner scanner told to apply a VEX. Not recorded: the ledger keeps the plain scan."""
+        return self._inner.with_vex(path)  # type: ignore[attr-defined, no-any-return]
 
 
 def _component(row: AffectedRow) -> Component:
@@ -198,7 +206,19 @@ def _attempt(session: Session, p: Pipeline, affected_id: int) -> Outcome:
         after = p.adapter.build_image(component, patch)
         recorders = [RecordingScanner(s) for s in p.scanners]
         verdict = run_gates(
-            GateInput(advisory, patch, before, after, recorders, p.suite_runner, p.differ),
+            GateInput(
+                advisory,
+                patch,
+                before,
+                after,
+                recorders,
+                p.suite_runner,
+                p.differ,
+                rebuilt_packages=tuple(p.rebuilt(after)) if p.rebuilt else (),
+                stream=component.stream,
+                vex_dir=p.vex_dir,
+                now=p.clock.now(),
+            ),
             p.gates,
         )
         attempt.verdict = json.dumps(

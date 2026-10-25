@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from pathlib import Path
 
 import pytest
 from sqlalchemy import select
@@ -359,3 +360,37 @@ def test_a_clean_artifact_stores_nothing(pending: sessionmaker[Session]) -> None
     process(pending, pipeline(), 1)
     with pending() as s:
         assert s.scalars(select(ScanFindingRow)).all() == []
+
+
+def vex_pipeline(tmp_path: Path, *, enabled: bool) -> Pipeline:
+    """Both scanners still report the target after the patch; the fakes honour a VEX."""
+    still = [FINDING]
+    return replace(
+        pipeline(),
+        scanners=(
+            fakes.FakeScanner({BEFORE: [FINDING], AFTER: still}, name="grype"),
+            fakes.FakeScanner({BEFORE: [FINDING], AFTER: still}, name="trivy"),
+        ),
+        gates=replace(CFG, vex_enabled=enabled),
+        rebuilt=lambda digest: [("nginx", "1.22.0-1-dabao1")],
+        vex_dir=tmp_path,
+    )
+
+
+def test_with_the_flag_on_a_cve_the_scanners_still_report_is_cleared_by_a_vex(
+    pending: sessionmaker[Session], tmp_path: Path
+) -> None:
+    assert process(pending, vex_pipeline(tmp_path, enabled=True), 1) is Outcome.PUBLISHED
+    assert len(list(tmp_path.glob("*.vex.json"))) == 2
+    with pending() as s:
+        att = s.scalars(select(AttemptRow)).one()
+        assert att.outcome == "SUCCEEDED" and "via VEX" in (att.verdict or "")
+        # the ledger keeps what a stock scan says, not what the VEX changed it to
+        assert {r.advisory_id for r in s.scalars(select(ScanFindingRow))} == {"CVE-2024-0001"}
+
+
+def test_with_the_flag_off_the_same_scan_is_unpatched_and_nothing_is_written(
+    pending: sessionmaker[Session], tmp_path: Path
+) -> None:
+    assert process(pending, vex_pipeline(tmp_path, enabled=False), 1) is Outcome.UNPATCHED
+    assert list(tmp_path.iterdir()) == []

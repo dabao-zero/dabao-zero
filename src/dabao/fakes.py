@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import hashlib
-from dataclasses import dataclass, field
+import json
+from dataclasses import dataclass, field, replace
+from pathlib import Path
 
 from dabao.gates import Verdict
 from dabao.models import Advisory, Component, Finding, Patch
@@ -39,6 +41,35 @@ class FakeDistroAdapter:
 class FakeScanner:
     findings_by_digest: dict[str, list[Finding]] = field(default_factory=dict)
     name: str = "fake"
+    honours_vex: bool = True  # False: the scanner ignores any VEX it is given
+    overclear: bool = False  # True: given any VEX it clears everything, as a buggy scanner might
+    vex_applied: bool = False
+
+    def with_vex(self, path: Path) -> FakeScanner:
+        """Apply an OpenVEX file the way the real scanners do: drop a finding when a `fixed`
+        statement names its CVE and a product whose package URL names its package."""
+        if not self.honours_vex:
+            return replace(self, vex_applied=True)
+        doc = json.loads(path.read_text())
+        fixed = [
+            (s["vulnerability"]["name"], [p["@id"] for p in s["products"]])
+            for s in doc["statements"]
+            if s["status"] == "fixed"
+        ]
+
+        def cleared(f: Finding) -> bool:
+            return self.overclear or any(
+                f.advisory_id == adv and any(f"/{f.package}@" in purl for purl in purls)
+                for adv, purls in fixed
+            )
+
+        return replace(
+            self,
+            vex_applied=True,
+            findings_by_digest={
+                d: [f for f in fs if not cleared(f)] for d, fs in self.findings_by_digest.items()
+            },
+        )
 
     def scan(self, image_digest: str) -> list[Finding]:
         return list(self.findings_by_digest.get(image_digest, []))
