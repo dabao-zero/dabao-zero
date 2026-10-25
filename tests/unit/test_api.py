@@ -182,3 +182,69 @@ def test_attempts_and_runs_report_agent_time(
     assert c.get("/v1/runs").json()[0]["agent_seconds"] == 378.0
     body = c.get("/v1/advisories/CVE-2024-0001").json()
     assert body["affected"][0]["attempts"][0]["agent_seconds"] == 378.0
+
+
+def _findings(seeded: sessionmaker[Session], digest: str = "sha256:aaa") -> None:
+    from dabao.orm import ScanFindingRow
+
+    rows = [
+        ("grype", "CVE-2025-1", "busybox", "Low", "unfixed"),
+        ("trivy", "CVE-2025-1", "busybox", "MEDIUM", "unfixed"),
+        ("trivy", "CVE-2025-1", "ssl_client", "MEDIUM", "unfixed"),
+        ("grype", "CVE-2025-2", "zlib", "HIGH", "fixed"),
+        ("grype", "CVE-2025-3", "curl", "LOW", "unknown"),
+    ]
+    with seeded() as s:
+        for scanner, adv, pkg, sev, state in rows:
+            s.add(
+                ScanFindingRow(
+                    artifact_digest=digest,
+                    scanner=scanner,
+                    advisory_id=adv,
+                    package=pkg,
+                    severity=sev,
+                    fix_state=state,
+                    created_at=1.0,
+                )  # fmt: skip
+            )
+        s.commit()
+
+
+def test_an_image_lists_the_cves_nobody_has_fixed_yet(
+    seeded: sessionmaker[Session], clock: FakeClock
+) -> None:
+    c = client(seeded, clock)
+    assert c.get("/v1/images").json()[0]["unfixed"] == 0
+    assert c.get("/v1/images/nginx").json()["known_unfixed"] == []
+    _findings(seeded)
+    (img,) = c.get("/v1/images").json()
+    assert (
+        img["unfixed"] == 1
+    )  # distinct CVEs: CVE-2025-1 on two packages counts once; fixed/unknown do not
+    known = c.get("/v1/images/nginx").json()["known_unfixed"]
+    assert known == [
+        {"advisory_id": "CVE-2025-1", "package": "busybox", "severity": "MEDIUM",
+         "scanners": ["grype", "trivy"]},
+        {"advisory_id": "CVE-2025-1", "package": "ssl_client", "severity": "MEDIUM",
+         "scanners": ["trivy"]},
+    ]  # fmt: skip
+
+
+def test_only_the_latest_live_artifact_counts(
+    seeded: sessionmaker[Session], clock: FakeClock
+) -> None:
+    from dabao.orm import ArtifactRow
+
+    _findings(seeded)
+    with seeded() as s:
+        s.add(
+            ArtifactRow(digest="sha256:bbb", image="nginx", tag="1.22.0-dabao2",
+                        stream="debian", published_at=900.0)
+        )  # fmt: skip
+        s.commit()
+    c = client(seeded, clock)
+    assert c.get("/v1/images").json()[0]["unfixed"] == 0  # the newer artifact has no findings
+    with seeded() as s:
+        s.get(ArtifactRow, "sha256:bbb").status = "REVOKED"  # type: ignore[union-attr]
+        s.commit()
+    assert c.get("/v1/images").json()[0]["unfixed"] == 1  # back to the older live artifact
