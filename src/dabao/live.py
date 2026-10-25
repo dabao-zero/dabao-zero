@@ -13,6 +13,7 @@ import tempfile
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 from dabao.models import Finding
 from dabao.seams import SuiteResult
@@ -64,10 +65,20 @@ class TrivyScanner:
             raise _fail("trivy", res)
         data = json.loads(res.stdout or b"{}")
         return [
-            Finding(advisory_id=v["VulnerabilityID"], package=v.get("PkgName", ""))
+            Finding(
+                advisory_id=v["VulnerabilityID"],
+                package=v.get("PkgName", ""),
+                severity=v.get("Severity", ""),
+                fix_state="fixed" if v.get("FixedVersion") else "unfixed",
+            )
             for r in data.get("Results", [])
             for v in r.get("Vulnerabilities") or []
         ]
+
+
+def _grype_fix_state(vulnerability: dict[str, Any]) -> str:
+    state = (vulnerability.get("fix") or {}).get("state", "unknown")
+    return "fixed" if state == "fixed" else "unknown" if state == "unknown" else "unfixed"
 
 
 @dataclass
@@ -84,7 +95,12 @@ class GrypeScanner:
             raise _fail("grype", res)
         data = json.loads(res.stdout or b"{}")
         return [
-            Finding(advisory_id=m["vulnerability"]["id"], package=m["artifact"]["name"])
+            Finding(
+                advisory_id=m["vulnerability"]["id"],
+                package=m["artifact"]["name"],
+                severity=m["vulnerability"].get("severity", ""),
+                fix_state=_grype_fix_state(m["vulnerability"]),
+            )
             for m in data.get("matches", [])
         ]
 

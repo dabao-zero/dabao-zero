@@ -54,3 +54,5 @@ class Finding(BaseModel):
 
     advisory_id: str
     package: str
+    severity: str = ""
+    fix_state: str = "unknown"  # "fixed" (scanner names a fix), "unfixed", or "unknown"
