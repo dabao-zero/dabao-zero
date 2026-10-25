@@ -84,6 +84,7 @@ class ImageSummaryOut(BaseModel):
     pending: int
     needs_human: int
     median_time_to_patch_s: float | None
+    unfixed: int
 
 
 class TagOut(BaseModel):
@@ -98,9 +99,17 @@ class TagOut(BaseModel):
     fixed_cves: int
 
 
+class KnownUnfixedOut(BaseModel):
+    advisory_id: str
+    package: str
+    severity: str
+    scanners: list[str]
+
+
 class ImageDetailOut(ImageSummaryOut):
     tags: list[TagOut]
     advisories: list[AffectedOut]
+    known_unfixed: list[KnownUnfixedOut]
 
 
 class StatsOut(BaseModel):
@@ -246,6 +255,9 @@ def create_app(
             **asdict(summary),
             tags=[TagOut(**asdict(t)) for t in tags],
             advisories=[_affected(r) for r in rows],
+            known_unfixed=[
+                KnownUnfixedOut(**asdict(k)) for k in catalog.known_unfixed(session, name)
+            ],
         )
 
     @v1.get("/stats", response_model=StatsOut)

@@ -14,7 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from dabao.models import AdvisoryStatus
-from dabao.orm import AffectedRow, ArtifactRow, AttemptRow, ImageRow
+from dabao.orm import AffectedRow, ArtifactRow, AttemptRow, ImageRow, ScanFindingRow
 
 PATCHED = AdvisoryStatus.PATCHED.value
 OPEN_STATUSES = (
@@ -40,6 +40,15 @@ class ImageSummary:
     pending: int
     needs_human: int
     median_time_to_patch_s: float | None
+    unfixed: int  # distinct CVEs the scanners report with no fix on the latest live artifact
+
+
+@dataclass(frozen=True)
+class KnownUnfixed:
+    advisory_id: str
+    package: str
+    severity: str
+    scanners: list[str]
 
 
 @dataclass(frozen=True)
@@ -86,6 +95,7 @@ class Run:
 class _Acc:
     rows: list[AffectedRow] = field(default_factory=list)
     artifacts: list[ArtifactRow] = field(default_factory=list)
+    findings: dict[str, list[ScanFindingRow]] = field(default_factory=dict)  # by artifact digest
 
 
 def _group(session: Session) -> tuple[dict[str, _Acc], dict[str, ImageRow]]:
@@ -95,7 +105,33 @@ def _group(session: Session) -> tuple[dict[str, _Acc], dict[str, ImageRow]]:
         acc.setdefault(row.image, _Acc()).rows.append(row)
     for art in session.scalars(select(ArtifactRow)):
         acc.setdefault(art.image, _Acc()).artifacts.append(art)
+    by_digest: dict[str, list[ScanFindingRow]] = {}
+    for f in session.scalars(select(ScanFindingRow).where(ScanFindingRow.fix_state == "unfixed")):
+        by_digest.setdefault(f.artifact_digest, []).append(f)
+    for a in acc.values():
+        a.findings = {x.digest: by_digest[x.digest] for x in a.artifacts if x.digest in by_digest}
     return acc, meta
+
+
+_SEVERITY_ORDER = {"CRITICAL": 4, "HIGH": 3, "MEDIUM": 2, "LOW": 1}
+
+
+def _known_unfixed(a: _Acc) -> list[KnownUnfixed]:
+    live = [x for x in a.artifacts if x.status == "PUBLISHED"]
+    latest = max(live, key=lambda x: x.published_at, default=None)
+    rows = a.findings.get(latest.digest, []) if latest else []
+    grouped: dict[tuple[str, str], list[ScanFindingRow]] = {}
+    for r in rows:
+        grouped.setdefault((r.advisory_id, r.package), []).append(r)
+    return [
+        KnownUnfixed(
+            advisory_id=adv,
+            package=pkg,
+            severity=max((r.severity.upper() for r in rs), key=lambda s: _SEVERITY_ORDER.get(s, 0)),
+            scanners=sorted({r.scanner for r in rs}),
+        )
+        for (adv, pkg), rs in sorted(grouped.items())
+    ]
 
 
 def _summary(name: str, a: _Acc, meta: dict[str, ImageRow]) -> ImageSummary:
@@ -122,12 +158,18 @@ def _summary(name: str, a: _Acc, meta: dict[str, ImageRow]) -> ImageSummary:
         pending=count(AdvisoryStatus.PENDING.value),
         needs_human=count(AdvisoryStatus.NEEDS_HUMAN.value),
         median_time_to_patch_s=statistics.median(times) if times else None,
+        unfixed=len({k.advisory_id for k in _known_unfixed(a)}),
     )
 
 
 def image_summaries(session: Session) -> list[ImageSummary]:
     acc, meta = _group(session)
     return [_summary(n, acc[n], meta) for n in sorted(acc)]
+
+
+def known_unfixed(session: Session, name: str) -> list[KnownUnfixed]:
+    acc, _ = _group(session)
+    return _known_unfixed(acc[name]) if name in acc else []
 
 
 def get_image(
