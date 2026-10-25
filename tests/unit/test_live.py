@@ -34,7 +34,12 @@ TRIVY_JSON = json.dumps(
         "Results": [
             {
                 "Vulnerabilities": [
-                    {"VulnerabilityID": "CVE-2022-48303", "PkgName": "tar"},
+                    {
+                        "VulnerabilityID": "CVE-2022-48303",
+                        "PkgName": "tar",
+                        "FixedVersion": "1.2",
+                        "Severity": "HIGH",
+                    },
                     {"VulnerabilityID": "CVE-2022-48303", "PkgName": "tar-scripts"},
                     {"VulnerabilityID": "CVE-2024-12133", "PkgName": "libtasn1-6"},
                 ]
@@ -46,8 +51,22 @@ TRIVY_JSON = json.dumps(
 GRYPE_JSON = json.dumps(
     {
         "matches": [
-            {"vulnerability": {"id": "CVE-2022-48303"}, "artifact": {"name": "tar"}},
-            {"vulnerability": {"id": "GHSA-xxxx"}, "artifact": {"name": "x"}},
+            {
+                "vulnerability": {
+                    "id": "CVE-2022-48303",
+                    "severity": "High",
+                    "fix": {"state": "fixed"},
+                },
+                "artifact": {"name": "tar"},
+            },
+            {
+                "vulnerability": {
+                    "id": "GHSA-xxxx",
+                    "severity": "Low",
+                    "fix": {"state": "not-fixed"},
+                },
+                "artifact": {"name": "x"},
+            },
         ]
     }
 )
@@ -61,7 +80,12 @@ def test_trivy_scans_a_built_image_from_its_oci_layout_and_parses_findings(tmp_p
         return done(TRIVY_JSON)
 
     found = TrivyScanner(source(tmp_path), runner=run).scan(AFTER)
-    assert Finding(advisory_id="CVE-2022-48303", package="tar") in found
+    assert (
+        Finding(advisory_id="CVE-2022-48303", package="tar", severity="HIGH", fix_state="fixed")
+        in found
+    )
+    unfixed = [f for f in found if f.package == "libtasn1-6"]
+    assert [f.fix_state for f in unfixed] == ["unfixed"]
     assert len(found) == 3
     assert calls[0][:3] == ["trivy", "image", "--quiet"] and "--input" in calls[0]
     assert str(tmp_path) in calls[0]
@@ -85,6 +109,12 @@ def test_grype_parses_matches(tmp_path: Path) -> None:
 
     found = GrypeScanner(source(tmp_path), runner=run).scan(AFTER)
     assert {f.advisory_id for f in found} == {"CVE-2022-48303", "GHSA-xxxx"}
+    by_id = {f.advisory_id: f for f in found}
+    assert (by_id["CVE-2022-48303"].fix_state, by_id["CVE-2022-48303"].severity) == (
+        "fixed",
+        "High",
+    )
+    assert by_id["GHSA-xxxx"].fix_state == "unfixed"
 
 
 @pytest.mark.parametrize("cls", [TrivyScanner, GrypeScanner])

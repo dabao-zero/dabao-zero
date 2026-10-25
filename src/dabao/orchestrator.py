@@ -12,15 +12,22 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from enum import StrEnum
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from dabao.db import SessionFactory
 from dabao.gates import GateConfig, GateInput, Verdict, run_gates
 from dabao.leases import LeaseHeld, acquire_lease, release_lease
-from dabao.models import Advisory, AdvisoryStatus, Component
+from dabao.models import Advisory, AdvisoryStatus, Component, Finding
 from dabao.models import Patch as PatchModel
-from dabao.orm import AdvisoryRow, AffectedRow, ArtifactRow, AttemptRow, PatchRow
+from dabao.orm import (
+    AdvisoryRow,
+    AffectedRow,
+    ArtifactRow,
+    AttemptRow,
+    PatchRow,
+    ScanFindingRow,
+)
 from dabao.seams import (
     AgentRunner,
     BuildDiffer,
@@ -70,6 +77,21 @@ class Pipeline:
     limits: Limits = field(default_factory=Limits)
     owner: str = "orchestrator-1"
     runner: str = "agent"  # recorded on every attempt; "manual_codex" for imported bundles
+
+
+class RecordingScanner:
+    """Wraps a scanner and remembers what it returned per digest, so the gate scans once and the
+    ledger can keep the result without a second scan."""
+
+    def __init__(self, inner: Scanner) -> None:
+        self._inner = inner
+        self.name = inner.name
+        self.results: dict[str, list[Finding]] = {}
+
+    def scan(self, image_digest: str) -> list[Finding]:
+        found = self._inner.scan(image_digest)
+        self.results[image_digest] = found
+        return found
 
 
 def _component(row: AffectedRow) -> Component:
@@ -174,8 +196,9 @@ def _attempt(session: Session, p: Pipeline, affected_id: int) -> Outcome:
         patch = result.patch
         before = p.adapter.build_image(component, None)
         after = p.adapter.build_image(component, patch)
+        recorders = [RecordingScanner(s) for s in p.scanners]
         verdict = run_gates(
-            GateInput(advisory, patch, before, after, p.scanners, p.suite_runner, p.differ),
+            GateInput(advisory, patch, before, after, recorders, p.suite_runner, p.differ),
             p.gates,
         )
         attempt.verdict = json.dumps(
@@ -193,7 +216,7 @@ def _attempt(session: Session, p: Pipeline, affected_id: int) -> Outcome:
                 p.clock.now(),
             )
             return Outcome.UNPATCHED
-        return _publish(session, p, attempt, affected, patch, after, verdict)
+        return _publish(session, p, attempt, affected, patch, after, verdict, recorders)
     except Exception as exc:  # noqa: BLE001 - an attempt must never take the loop down
         log.exception("attempt %s aborted", attempt.id)
         session.rollback()
@@ -214,6 +237,33 @@ def _attempt(session: Session, p: Pipeline, affected_id: int) -> Outcome:
         return Outcome.ABORTED
 
 
+def _record_findings(
+    session: Session, digest: str, recorders: Sequence[RecordingScanner], now: float
+) -> None:
+    """Keep what each scanner still reported on the published image: one row per scanner,
+    advisory and package. The unfixed ones are the known-unfixed list (ADR-0011)."""
+    session.flush()  # the artifact row must exist before rows that point at it
+    session.execute(delete(ScanFindingRow).where(ScanFindingRow.artifact_digest == digest))
+    seen: set[tuple[str, str, str]] = set()
+    for rec in recorders:
+        for f in rec.results.get(digest, []):
+            key = (rec.name, f.advisory_id, f.package)
+            if key in seen:
+                continue
+            seen.add(key)
+            session.add(
+                ScanFindingRow(
+                    artifact_digest=digest,
+                    scanner=rec.name,
+                    advisory_id=f.advisory_id,
+                    package=f.package,
+                    severity=f.severity,
+                    fix_state=f.fix_state,
+                    created_at=now,
+                )
+            )
+
+
 def _publish(
     session: Session,
     p: Pipeline,
@@ -222,6 +272,7 @@ def _publish(
     patch: PatchModel,
     digest: str,
     verdict: Verdict,
+    recorders: Sequence[RecordingScanner] = (),
 ) -> Outcome:
     now = p.clock.now()
     tag = f"{affected.version}-dabao1"
@@ -259,6 +310,7 @@ def _publish(
                 published_at=now,
             )
         )
+    _record_findings(session, digest, recorders, now)
     attempt.outcome, attempt.finished_at = "SUCCEEDED", now
     affected.status, affected.patched_at = AdvisoryStatus.PATCHED.value, now
     session.commit()

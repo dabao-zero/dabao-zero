@@ -11,7 +11,14 @@ from dabao.gates import GateConfig
 from dabao.leases import acquire_lease
 from dabao.models import Component, Finding, Patch, PatchSource
 from dabao.orchestrator import Limits, Outcome, Pipeline, process, run_once
-from dabao.orm import AdvisoryRow, AffectedRow, ArtifactRow, AttemptRow, PatchRow
+from dabao.orm import (
+    AdvisoryRow,
+    AffectedRow,
+    ArtifactRow,
+    AttemptRow,
+    PatchRow,
+    ScanFindingRow,
+)
 from dabao.seams import AgentResult, SuiteResult
 from dabao.signing import GuardedSigner
 
@@ -301,3 +308,54 @@ def test_a_run_that_happened_elsewhere_reports_its_own_wall_time(
     process(pending, p, 1)
     with pending() as s:
         assert s.scalars(select(AttemptRow)).one().agent_seconds == 378.0
+
+
+def pipeline_with_after_findings(findings: list[Finding]) -> Pipeline:
+    """Both scanners see the target CVE before, and `findings` (not the target) after."""
+    return replace(
+        pipeline(),
+        scanners=(
+            fakes.FakeScanner({BEFORE: [FINDING], AFTER: findings}, name="grype"),
+            fakes.FakeScanner({BEFORE: [FINDING], AFTER: findings}, name="trivy"),
+        ),
+    )
+
+
+def test_a_published_artifact_keeps_what_each_scanner_still_reported(
+    pending: sessionmaker[Session],
+) -> None:
+    left = [
+        Finding(
+            advisory_id="CVE-2025-1", package="busybox", severity="MEDIUM", fix_state="unfixed"
+        ),
+        Finding(advisory_id="CVE-2025-2", package="zlib", severity="LOW", fix_state="fixed"),
+    ]
+    assert process(pending, pipeline_with_after_findings(left), 1) is Outcome.PUBLISHED
+    with pending() as s:
+        rows = s.scalars(select(ScanFindingRow).order_by(ScanFindingRow.id)).all()
+        got = {(r.scanner, r.advisory_id, r.package, r.severity, r.fix_state) for r in rows}
+        assert got == {
+            (sc, "CVE-2025-1", "busybox", "MEDIUM", "unfixed") for sc in ("grype", "trivy")
+        } | {(sc, "CVE-2025-2", "zlib", "LOW", "fixed") for sc in ("grype", "trivy")}
+        assert {r.artifact_digest for r in rows} == {AFTER}
+
+
+def test_duplicate_findings_from_one_scanner_are_stored_once(
+    pending: sessionmaker[Session],
+) -> None:
+    dup = Finding(advisory_id="CVE-2025-1", package="busybox", fix_state="unfixed")
+    process(pending, pipeline_with_after_findings([dup, dup]), 1)
+    with pending() as s:
+        assert len(s.scalars(select(ScanFindingRow)).all()) == 2  # one per scanner
+
+
+def test_a_failed_attempt_stores_no_findings(pending: sessionmaker[Session]) -> None:
+    process(pending, pipeline(still_vulnerable=True), 1)
+    with pending() as s:
+        assert s.scalars(select(ScanFindingRow)).all() == []
+
+
+def test_a_clean_artifact_stores_nothing(pending: sessionmaker[Session]) -> None:
+    process(pending, pipeline(), 1)
+    with pending() as s:
+        assert s.scalars(select(ScanFindingRow)).all() == []
