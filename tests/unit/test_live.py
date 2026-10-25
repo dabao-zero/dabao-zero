@@ -274,3 +274,80 @@ def test_a_scanner_given_a_vex_passes_it_on_and_the_original_is_unchanged(tmp_pa
         assert "--vex" not in seen[-2]
         assert seen[-1][seen[-1].index("--vex") + 1] == str(vex)
         assert with_vex.name == plain.name
+
+
+# --- OciDiffer on an Alpine image ------------------------------------------------------------
+
+APK_BASE = (
+    b"C:Q1aaa=\nP:busybox\nV:1.37.0-r31\nF:bin\nR:busybox\n\n"
+    b"C:Q1bbb=\nP:brotli-libs\nV:1.2.0-r1\nF:usr/lib\nR:libbrotlicommon.so.1.2.0\n\n"
+)
+APK_AFTER = (
+    b"C:Q1aaa=\nP:busybox\nV:1.37.0-r31\nF:bin\nR:busybox\n\n"
+    b"C:Q1ccc=\nP:brotli-libs\nV:1.2.0-r2\nF:usr/lib\nR:libbrotlicommon.so.1.2.0\n\n"
+)
+
+
+def apk_layout(tmp_path: Path, extra: dict[str, bytes] | None = None) -> str:
+    return write_oci(
+        tmp_path,
+        [
+            layer({"lib/apk/db/installed": APK_BASE, "bin/busybox": b"b"}),  # the base
+            layer({"tmp/dabao-apk/brotli-libs-1.2.0-r2.apk": b"x"}),  # the staging COPY
+            layer(
+                {
+                    "usr/lib/libbrotlicommon.so.1.2.0": b"new",
+                    "lib/apk/db/installed": APK_AFTER,
+                    "etc/apk/world": b"brotli-libs\n",
+                    "var/log/apk.log": b"log",
+                    **(extra or {}),
+                },
+                ("tmp/.wh.dabao-apk",),
+            ),
+        ],
+    )
+
+
+def test_apk_differ_reports_nothing_when_every_change_belongs_to_a_rebuilt_package(
+    tmp_path: Path,
+) -> None:
+    digest = apk_layout(tmp_path)
+    differ = OciDiffer(ImageSource(BASE, "nginx", {digest: tmp_path}), added_layers=2)
+    assert differ.changed_files(BASE, digest) == []
+
+
+def test_apk_differ_reports_a_change_no_rebuilt_package_explains(tmp_path: Path) -> None:
+    digest = apk_layout(tmp_path, {"usr/bin/evil": b"!", "etc/passwd": b"root::0:0"})
+    differ = OciDiffer(ImageSource(BASE, "nginx", {digest: tmp_path}), added_layers=2)
+    assert differ.changed_files(BASE, digest) == ["etc/passwd", "usr/bin/evil"]
+
+
+def test_a_package_that_did_not_change_version_explains_nothing(tmp_path: Path) -> None:
+    digest = apk_layout(tmp_path, {"bin/busybox": b"tampered"})  # busybox kept its version
+    differ = OciDiffer(ImageSource(BASE, "nginx", {digest: tmp_path}), added_layers=2)
+    assert differ.changed_files(BASE, digest) == ["bin/busybox"]
+
+
+def test_rebuilt_packages_are_the_ones_whose_version_changed_in_an_apk_image(
+    tmp_path: Path,
+) -> None:
+    digest = apk_layout(tmp_path)
+    differ = OciDiffer(ImageSource(BASE, "nginx", {digest: tmp_path}), added_layers=2)
+    assert differ.rebuilt_packages(digest) == [("brotli-libs", "1.2.0-r2")]
+
+
+def test_rebuilt_packages_are_the_marked_ones_in_a_debian_image(tmp_path: Path) -> None:
+    digest = rebuilt_layout(tmp_path)
+    differ = OciDiffer(ImageSource(BASE, "debian:slim", {digest: tmp_path}), base_layers=1)
+    assert differ.rebuilt_packages(digest) == [("tar", "1.34+dfsg-1.2+dabao1")]
+
+
+def test_rebuilt_packages_is_none_when_the_image_cannot_be_read(tmp_path: Path) -> None:
+    assert OciDiffer(ImageSource(BASE, "x", {})).rebuilt_packages(AFTER) is None
+
+
+def test_added_layers_says_how_many_layers_the_build_put_on_top(tmp_path: Path) -> None:
+    digest = apk_layout(tmp_path, {"usr/bin/evil": b"!"})  # three layers: one base, two added
+    src = ImageSource(BASE, "nginx", {digest: tmp_path})
+    # counting only the last layer as the build's still sees the change that is in it
+    assert OciDiffer(src, added_layers=1).changed_files(BASE, digest) == ["usr/bin/evil"]
