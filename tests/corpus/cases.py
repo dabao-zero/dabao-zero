@@ -5,7 +5,9 @@ Every gate must be turned red by at least one bad case; test_corpus.py enforces 
 
 from __future__ import annotations
 
+import tempfile
 from dataclasses import dataclass, replace
+from pathlib import Path
 
 from dabao import fakes
 from dabao.gates import GateConfig, GateInput
@@ -27,6 +29,8 @@ PATCH = Patch(
 )
 BEFORE, AFTER = "sha256:before", "sha256:after"
 FINDING = Finding(advisory_id=ADV.id, package="nginx")
+SIBLING = Finding(advisory_id="CVE-2024-0002", package="nginx")  # same upload, not fixed here
+_VEX_DIR = tempfile.TemporaryDirectory(prefix="dabao-corpus-")  # removed at exit
 GOOD_CHANGED = ["src/http/ngx_http_parse.c", "var/lib/dpkg/status"]
 
 
@@ -81,6 +85,23 @@ def _bad_cases() -> list[BadCase]:
             "CVE still reported under an alias",
             "scanners_clear",
             replace(g, scanners=alias_still_reported),
+        ),
+        BadCase(
+            "a VEX for this CVE would also clear a sibling CVE (ADR-0010 check 4)",
+            "scanners_clear",
+            replace(
+                g,
+                scanners=(
+                    fakes.FakeScanner(
+                        {BEFORE: [FINDING], AFTER: [FINDING, SIBLING]}, name="grype", overclear=True
+                    ),
+                    fakes.FakeScanner({BEFORE: [FINDING], AFTER: [FINDING, SIBLING]}, name="trivy"),
+                ),
+                rebuilt_packages=(("nginx", "1.22.0-1-dabao1"),),
+                stream="debian",
+                vex_dir=Path(_VEX_DIR.name),
+            ),
+            replace(CFG, vex_enabled=True),
         ),
         BadCase(
             "only one scanner configured", "scanners_clear", replace(g, scanners=g.scanners[:1])

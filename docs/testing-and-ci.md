@@ -79,6 +79,7 @@ No Docker, under ~30s. Install: `ln -sf ../../scripts/git-hooks/pre-push .git/ho
 | `e2e-replay` | yes from V2 | Network off; recorded agent |
 | `secret-scan` (gitleaks) | yes | Credentials must never enter git |
 | `dep-scan` (Grype on lockfile/our images) | yes | We run our own scanners on ourselves |
+| `scanner-canary` (weekly and on demand, `make test-scanners`) | no | Pinned Trivy and Grype still honour our VEX and clear only the CVE named (ADR-0010) |
 | `docs` (build docs) | yes from V4 | |
 | `frontend` (svelte-check, tsc, vitest, `vite build`; Node 22, `npm ci`) | yes from V4 | Path-filtered; reports green when frontend is untouched |
 
