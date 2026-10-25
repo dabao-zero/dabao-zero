@@ -1,7 +1,7 @@
 # ADR-0011: A zero-finding tier for users whose scanners ignore VEX
 
-- Status: Proposed
-- Date: 2026-10-23
+- Status: Accepted
+- Date: 2026-10-23 (accepted 2026-10-25)
 - Deciders: Jian Rong Lee
 
 Builds on [ADR-0010](0010-clear-cves-with-gate-issued-vex.md), which covers users whose scanners read our VEX.
