@@ -254,3 +254,23 @@ def test_smoke_suite_returns_none_when_the_image_cannot_be_reached(tmp_path: Pat
 
 def test_smoke_suite_cannot_test_the_base_image_it_has_no_layout_for() -> None:
     assert SmokeSuiteRunner(ImageSource(BASE, "debian:slim"), ["true"]).run(BASE) is None
+
+
+def test_a_scanner_given_a_vex_passes_it_on_and_the_original_is_unchanged(tmp_path: Path) -> None:
+    seen: list[list[str]] = []
+
+    def run(args: list[str]) -> subprocess.CompletedProcess[bytes]:
+        seen.append(args)
+        return done(TRIVY_JSON if args[0] == "trivy" else GRYPE_JSON)
+
+    vex = tmp_path / "v.json"
+    for plain in (
+        TrivyScanner(source(tmp_path), runner=run),
+        GrypeScanner(source(tmp_path), runner=run),
+    ):
+        with_vex = plain.with_vex(vex)
+        plain.scan(AFTER)
+        with_vex.scan(AFTER)
+        assert "--vex" not in seen[-2]
+        assert seen[-1][seen[-1].index("--vex") + 1] == str(vex)
+        assert with_vex.name == plain.name

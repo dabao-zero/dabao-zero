@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help sync lint format typecheck test-unit test-integration test-docker db-up db-down check frontend-check demo run hooks
+.PHONY: help sync lint format typecheck test-unit test-integration test-docker test-scanners db-up db-down check frontend-check demo run hooks
 
 help: ## List targets
 	@grep -E '^[a-zA-Z_-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-18s %s\n", $$1, $$2}'
@@ -27,6 +27,9 @@ test-integration: ## Postgres tests (run `make db-up` first); skips without DATA
 
 test-docker: ## Real image builds (slow; needs Docker, buildx and network)
 	uv run pytest tests/integration -q -m docker
+
+test-scanners: ## VEX canary: do the installed Trivy and Grype still honour our statements? (needs both, and network)
+	uv run pytest tests/integration -q -m scanners
 
 db-up: ## Start a throwaway local Postgres 17 on :5432 (needs Docker)
 	docker run -d --rm --name dabao-pg -e POSTGRES_PASSWORD=postgres -p 5432:5432 postgres:17
