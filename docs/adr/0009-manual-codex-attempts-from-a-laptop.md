@@ -1,6 +1,6 @@
 # ADR-0009: Bootstrap with human-launched Codex attempts from a laptop
 
-- Status: Proposed
+- Status: Accepted 2026-10-27
 - Date: 2026-10-17
 - Deciders: Jian Rong Lee
 
@@ -54,5 +54,8 @@ on a server is not authorised in writing, so this ADR does not do that.
 - Costs: throughput is one person's laptop and subscription limits; a new import path to build, test
   and label honestly.
 - Needs: the candidate-bundle schema, an import command, a sandboxed run script and a runbook (epic E8).
-- Open: nobody has read OpenAI's Terms of Use text (the pages returned 403). Read it before this goes
-  from Proposed to Accepted.
+- Accepted on the owner's decision (2026-10-27) with one gap left open: nobody has read OpenAI's Terms of
+  Use text (the pages returned 403). The owner judges a hand-started run on their own login to be
+  ordinary use. If the Terms are later read and forbid it, decision 7 applies: revisit, do not work around.
+- Scope: this ADR covers Codex only. A hand-run Claude Code session would need its own amendment (a new
+  `runner` value, and a ruling on how ADR-0008, which excludes the Anthropic SDK and key, applies).
