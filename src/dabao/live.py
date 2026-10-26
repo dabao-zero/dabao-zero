@@ -330,7 +330,7 @@ class HttpUpstreamFetcher:
     """
 
     allowlist: tuple[str, ...]
-    timeout_s: float = 30.0
+    timeout_s: float = 60.0  # savannah answers slowly under load
     opener: Callable[[str, float], tuple[str, bytes]] | None = (
         None  # (url, timeout) -> (final url, body)
     )

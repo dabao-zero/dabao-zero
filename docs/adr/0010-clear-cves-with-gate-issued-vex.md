@@ -71,3 +71,20 @@ subcomponents did not work in either.
   `NEEDS_HUMAN`; that is accepted.
 - Open: whether a second VEX format should ship from day one; how to handle an advisory whose feed lists no fix
   reference (it stays `UNPATCHED` until one appears).
+
+## Implementation notes (2026-10-27)
+
+- Check 1 (`gates.fix_reference_problem`): OSV references of type `FIX` are stored on the advisory
+  (`advisories.fix_refs`). The Debian tracker and Alpine secdb feeds carry no fix links, so an advisory known
+  only from them has none and can never get a VEX. Matching ignores scheme, fragment, a trailing slash and
+  `.patch`, and accepts a commit id that is a 7+ hex prefix of the other, in the same repository.
+- Check 2 (`upstream.containment_problem`): the gate reads the upstream commit through `UpstreamFetcher`
+  (`live.HttpUpstreamFetcher`: allow-listed hosts only, GitHub, GitLab and cgit patch URLs, redirects only
+  within the same site, 2 MB cap). Every changed line of the commit's source files must appear in the patch
+  for the same file, whitespace-normalised; upstream tests, docs and changelogs are not required. It is
+  **one-directional**: a patch that also changes other lines still passes this check. Extra changes are
+  limited by the build-diff gate (files) and, for agents, by the prompt (DAB-68), not by this check.
+- An unreadable commit makes the gate fail, so the attempt is `UNPATCHED` with the reason in the verdict,
+  not `NEEDS_HUMAN` as the card said; every gate failure is handled that way in the orchestrator.
+- Both checks always apply to a VEX. `GateConfig.require_fix_reference` and `require_containment` (default
+  off) apply them to every patch through the provenance gate.
