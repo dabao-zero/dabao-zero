@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Run, Stats } from "../lib/api";
-  import { fixHref, formatDateTime, formatDuration, formatUsd, formatCount } from "../lib/format";
+  import { fixHref, formatDateTime, formatDuration, formatUsd, formatCount, isManualRun } from "../lib/format";
   import { REPO_URL } from "../lib/config";
   import OpenBox from "../components/OpenBox.svelte";
 
@@ -89,7 +89,7 @@
               <td>{r.image}</td>
               <td class="mono">{r.package}</td>
               <td>{r.outcome}</td>
-              <td>{r.runner === "manual_codex" ? "Agent, started by the maintainer" : "Agent"}</td>
+              <td>{isManualRun(r.runner) ? "Agent, started by the maintainer" : "Agent"}</td>
               <td>{formatDateTime(r.started_at)}</td>
               <td class="num">{formatDuration(r.agent_seconds)}</td>
               <td class="num">{formatDuration(r.duration_s)}</td>

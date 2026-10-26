@@ -138,3 +138,8 @@ export function catalogHref(s: CatalogQuery): string {
   const qs = params.toString();
   return qs ? `#/images?${qs}` : "#/images";
 }
+
+/** Runs a person started by hand (ADR-0009, ADR-0013): runner is manual_codex or manual_claude_code. */
+export function isManualRun(runner: string | undefined): boolean {
+  return runner?.startsWith("manual_") ?? false;
+}

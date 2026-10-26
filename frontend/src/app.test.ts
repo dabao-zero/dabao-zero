@@ -130,6 +130,13 @@ describe("fix page", () => {
     render(FixView, { advisory: manual, rowId: 1 });
     expect(screen.getByText(/agent-patched, run started by the maintainer/i)).toBeTruthy();
   });
+
+  it("says the same for a hand-run Claude Code attempt", () => {
+    const manual = structuredClone(advisory);
+    manual.affected[0].attempts[0].runner = "manual_claude_code";
+    render(FixView, { advisory: manual, rowId: 1 });
+    expect(screen.getByText(/agent-patched, run started by the maintainer/i)).toBeTruthy();
+  });
 });
 
 describe("landing page", () => {

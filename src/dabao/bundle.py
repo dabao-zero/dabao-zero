@@ -18,6 +18,7 @@ BUNDLE_VERSION: Literal[1] = 1
 
 class Runner(StrEnum):
     MANUAL_CODEX = "manual_codex"
+    MANUAL_CLAUDE_CODE = "manual_claude_code"
 
 
 class BundleError(ValueError):

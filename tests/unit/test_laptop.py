@@ -9,12 +9,15 @@ import pytest
 
 from dabao.bundle import Usage, load_bundle
 from dabao.laptop import (
+    CLAUDE_CODE,
     CodexRun,
     ExecCodexRunner,
     LaptopAttemptError,
     build_prompt,
+    claude_command,
     codex_command,
     default_scratch_root,
+    parse_claude_output,
     parse_codex_usage,
     run_attempt,
     sandbox_env,
@@ -260,3 +263,91 @@ def test_a_log_without_usage_still_reports_the_wall_time() -> None:
     assert parse_codex_usage("", wall_seconds=3.0) == Usage(
         tokens_in=0, tokens_out=0, cost_usd=0.0, wall_seconds=3.0
     )
+
+
+@dataclass
+class FakeClaude:
+    """Stands in for `claude -p`: the login must sit under CLAUDE_CONFIG_DIR."""
+
+    seen: dict[str, object] = field(default_factory=dict)
+
+    def run(self, prompt: str, workdir: Path, env: dict[str, str]) -> CodexRun:
+        cfg = Path(env["CLAUDE_CONFIG_DIR"])
+        self.seen = {"env": dict(env), "files": sorted(p.name for p in cfg.iterdir())}
+        (workdir / "src.c").write_text("good\n")
+        return CodexRun(final_message=FINAL, log="claude transcript", version="2.1.310")
+
+
+def test_claude_code_attempt_emits_a_manual_claude_code_bundle(
+    source: Path, auth: Path, tmp_path: Path
+) -> None:
+    claude = FakeClaude()
+    out = tmp_path / "bundle.json"
+    work = tmp_path / "work"
+    work.mkdir()
+    run_attempt(
+        claude,
+        source_dir=source,
+        advisory_id="CVE-2024-1234",
+        component=COMP,
+        out_path=out,
+        auth_file=auth,
+        environ=POISONED,
+        scratch_root=work,
+        model="sonnet",
+        now=5.0,
+        harness=CLAUDE_CODE,
+    )
+    b = load_bundle(out.read_text())
+    assert b.runner.value == "manual_claude_code" and b.tool_versions == {"claude-code": "2.1.310"}
+    assert claude.seen["files"] == [".credentials.json"]
+    env = claude.seen["env"]
+    assert isinstance(env, dict) and "CODEX_HOME" not in env
+    assert set(env) <= {"PATH", "LANG", "LC_ALL", "TERM", "TZ", "HOME", "CLAUDE_CONFIG_DIR"}
+    assert list(work.iterdir()) == []
+
+
+def test_claude_command_has_no_shell_and_no_web_unless_asked() -> None:
+    offline = claude_command(None, network=False, budget_usd=None)
+    assert "-p" in offline and "dontAsk" in offline
+    tools = offline[offline.index("--tools") + 1]
+    assert tools == "Read,Edit,Write,Glob,Grep" and "Bash" not in tools
+    assert "--dangerously-skip-permissions" not in offline
+    online = claude_command("sonnet", network=True, budget_usd=2.0)
+    assert online[online.index("--tools") + 1].endswith(",WebFetch")
+    assert online[online.index("--model") + 1] == "sonnet"
+    assert online[online.index("--max-budget-usd") + 1] == "2"
+
+
+def test_parse_claude_output_sums_all_input_kinds() -> None:
+    raw = json.dumps(
+        {
+            "result": FINAL,
+            "duration_ms": 2500,
+            "total_cost_usd": 0.9,
+            "usage": {
+                "input_tokens": 2,
+                "cache_creation_input_tokens": 100,
+                "cache_read_input_tokens": 50,
+                "output_tokens": 7,
+            },
+        }
+    )
+    final, usage = parse_claude_output(raw)
+    assert final == FINAL
+    assert usage == Usage(tokens_in=152, tokens_out=7, cost_usd=0.0, wall_seconds=2.5)
+
+
+def test_parse_claude_output_prefers_structured_output() -> None:
+    final, _ = parse_claude_output(
+        json.dumps({"structured_output": {"summary": "s"}, "result": "x"})
+    )
+    assert json.loads(final) == {"summary": "s"}
+
+
+@pytest.mark.parametrize(
+    "raw", ["not json", "[]", json.dumps({"is_error": True, "result": "login expired"})]
+)
+def test_parse_claude_output_rejects_bad_runs(raw: str) -> None:
+    with pytest.raises(LaptopAttemptError):
+        parse_claude_output(raw)

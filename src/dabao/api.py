@@ -33,7 +33,7 @@ class GateOut(BaseModel):
 
 class AttemptOut(BaseModel):
     id: int
-    runner: str  # "agent" or "manual_codex" (ADR-0009)
+    runner: str  # "agent", "manual_codex" or "manual_claude_code" (ADR-0009, ADR-0013)
     outcome: str
     started_at: float
     finished_at: float | None
