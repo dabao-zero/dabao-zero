@@ -20,6 +20,7 @@ class AdvisoryRow(Base):
 
     id: Mapped[str] = mapped_column(String, primary_key=True)
     aliases: Mapped[str] = mapped_column(Text, default="")  # newline-separated
+    fix_refs: Mapped[str] = mapped_column(Text, default="", server_default="")  # newline-separated
     affected: Mapped[list[AffectedRow]] = relationship(back_populates="advisory")
 
 
