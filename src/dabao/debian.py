@@ -14,26 +14,26 @@ from __future__ import annotations
 
 import hashlib
 import json
-import subprocess
-from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from email.utils import format_datetime
 from pathlib import Path
 
+from dabao.buildx import (
+    BuildError,
+    Runner,
+    build_oci,
+    check_debian_version,
+    check_name,
+    default_runner,
+)
 from dabao.models import Component, Patch
-
-Runner = Callable[[list[str]], subprocess.CompletedProcess[bytes]]
 
 LOCAL_SUFFIX = "+dabao1"
 
 
-class DebianBuildError(Exception):
+class DebianBuildError(BuildError):
     pass
-
-
-def _run(args: list[str]) -> subprocess.CompletedProcess[bytes]:
-    return subprocess.run(args, capture_output=True, timeout=3600, check=False)
 
 
 @dataclass(frozen=True)
@@ -105,7 +105,7 @@ RUN set -eu; cd /tmp/dabao-debs; keep=""; \\
 class DebianAdapter:
     base: DebianBase
     work_dir: Path
-    runner: Runner = _run
+    runner: Runner = default_runner
     builder: str = "dabao-builder"  # a buildx builder with the docker-container driver
     archives: dict[str, Path] = field(default_factory=dict)  # digest -> OCI layout directory
 
@@ -116,6 +116,8 @@ class DebianAdapter:
             raise ValueError(f"the debian adapter cannot build the {component.stream} stream")
         if patch.component != component:
             raise ValueError("patch does not match the component being built")
+        check_name(component.package)
+        check_debian_version(component.version)
         key = hashlib.sha256(
             json.dumps(
                 [component.model_dump(), patch.diff, self.base.digest, self.base.snapshot]
@@ -127,21 +129,9 @@ class DebianAdapter:
         (ctx / "Dockerfile").write_text(render_dockerfile(component, self.base))
         (ctx / "patch.diff").write_text(patch.diff)
         (ctx / "changelog.entry").write_text(changelog_entry(component, patch, self.base))
-        cmd = [
-            "docker", "buildx", "build",
-            "--builder", self.builder,
-            "--no-cache", "--provenance=false", "--sbom=false",
-            "--build-arg", f"SOURCE_DATE_EPOCH={self.base.source_date_epoch}",
-            "--output", f"type=oci,tar=false,dest={out},rewrite-timestamp=true",
-            str(ctx),
-        ]  # fmt: skip
-        res = self.runner(cmd)
-        if res.returncode != 0:
-            tail = res.stderr.decode(errors="replace")[-1500:]
-            raise DebianBuildError(f"docker build failed ({res.returncode}): {tail}")
-        manifests = json.loads((out / "index.json").read_text()).get("manifests", [])
-        if not manifests:
-            raise DebianBuildError("the build wrote no image digest")
-        digest = str(manifests[0]["digest"])
+        try:
+            digest = build_oci(self.runner, self.builder, ctx, out, self.base.source_date_epoch)
+        except BuildError as exc:
+            raise DebianBuildError(str(exc)) from exc
         self.archives[digest] = out
         return digest

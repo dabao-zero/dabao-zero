@@ -22,4 +22,5 @@ COPY --from=build /out/ /tmp/dabao-apk/
 # the signature names the key by file name, so the key keeps its name; it is removed again after the install
 RUN cp /tmp/dabao-apk/*.rsa.pub /etc/apk/keys/ \
  && apk add --no-cache /tmp/dabao-apk/brotli-libs-*.apk \
- && rm -rf /tmp/dabao-apk /etc/apk/keys/builder-*.rsa.pub
+ && for k in /tmp/dabao-apk/*.rsa.pub; do rm -f "/etc/apk/keys/$(basename "$k")"; done \
+ && rm -rf /tmp/dabao-apk

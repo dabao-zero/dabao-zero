@@ -140,3 +140,26 @@ def test_a_manifest_digest_that_is_not_there_is_an_error(tmp_path: Path) -> None
 
     with pytest.raises(DebianBuildError, match="digest"):
         adapter(tmp_path, Empty()).build_image(COMP, PATCH)
+
+
+@pytest.mark.parametrize("bad", ["x; rm -rf /", "a b", "$(id)", "../x", "UPPER", "", "-flag"])
+def test_package_names_that_could_inject_shell_are_refused(tmp_path: Path, bad: str) -> None:
+    comp = COMP.model_copy(update={"package": bad})
+    patch = PATCH.model_copy(update={"component": comp})
+    with pytest.raises(ValueError, match="package name"):
+        adapter(tmp_path, FakeDocker()).build_image(comp, patch)
+
+
+@pytest.mark.parametrize("bad", ["1.0; id", "1.0 x", "$(id)", "1.0`id`", "", "1.0\n2"])
+def test_versions_that_could_inject_shell_are_refused(tmp_path: Path, bad: str) -> None:
+    comp = COMP.model_copy(update={"version": bad})
+    patch = PATCH.model_copy(update={"component": comp})
+    with pytest.raises(ValueError, match="version"):
+        adapter(tmp_path, FakeDocker()).build_image(comp, patch)
+
+
+def test_real_debian_versions_are_accepted(tmp_path: Path) -> None:
+    for v in ["1.34+dfsg-1.2", "1:2.66-4+deb12u1", "3.0.11-1~deb12u2", "4.19.0-2+deb12u1"]:
+        comp = COMP.model_copy(update={"version": v})
+        patch = PATCH.model_copy(update={"component": comp})
+        adapter(tmp_path, FakeDocker()).build_image(comp, patch)

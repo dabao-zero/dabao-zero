@@ -6,13 +6,16 @@ patch path. Python 3.13 / FastAPI / uv / pytest backend (ADR-0007); Svelte 5 + V
 catalog frontend in `frontend/`. Trust the code over these docs where they disagree, and fix the docs.
 
 **Built:** scaffold, seams and fakes, publish gates + known-good/bad corpus, DB schema and migrations,
-leases, orchestrator, `/v1` ledger API, catalog frontend (dabao-zero UI), OpenAI-compatible agent client,
-regctl package inventory, guarded signer (`signing.py`), advisory parsing/ingestion (`ingest.py`,
-`versions.py`), operator CLI (`cli.py`, `operator.py`), manual Codex attempts (`bundle.py`, `manual.py`,
-`laptop.py`, ADR-0009), Debian adapter (`debian.py`: one patched source-package rebuild, reproducible
-digest, tested on tar). **Not built:** Alpine/Wolfi adapters, a live pipeline wiring the Debian adapter,
-sandbox tool box, real cosign/registry publishing, live feed fetchers, anything that
-needs Docker, Debian mirrors or a live LLM.
+leases, orchestrator, `/v1` ledger API, catalog frontend (landing page and catalog), OpenAI-compatible
+agent client and its sandbox toolbox (`toolbox.py`), regctl package inventory, guarded signer
+(`signing.py`), advisory ingestion for Debian and Alpine (`ingest.py`, `versions.py`), operator CLI,
+manual Codex attempts (`bundle.py`, `manual.py`, `laptop.py`, ADR-0009), distro adapters for Debian and
+Alpine (`debian.py`, `alpine.py`, shared `buildx.py`: reproducible OCI builds of one patched package),
+live gate parts (`live.py`: Trivy and Grype, OCI differ, smoke runner) and OpenVEX (`vex.py`, ADR-0010;
+the gate's VEX clearing is behind `GateConfig.vex_enabled`, off). `scripts/e1_replay.py` wires a live
+Debian pipeline end to end. **Not built:** the Wolfi adapter, the VEX evidence checks (DAB-70, DAB-71),
+real cosign signing and registry publishing, live feed fetchers, a network namespace around the agent
+sandbox, anything that needs a live LLM (no key is configured).
 
 Map: `src/dabao/` (`gates.py`, `orchestrator.py`, `agent.py`, `llm.py`, `seams.py` + `fakes.py`,
 `api.py`, `orm.py`, `signing.py`, `ingest.py`, `cli.py`), `migrations/`, `tests/{unit,integration,corpus}`, `frontend/`.
@@ -22,7 +25,9 @@ Docs: `PLAN.md` (what and why), `docs/adr/` (decisions, do not relitigate), `SLI
 ## HOW
 - `make` lists targets. `make check` (ruff, mypy strict, unit) is the pre-push gate; run it before
   every push. `make frontend-check` for `frontend/`. `make hooks` installs the pre-push hook. `make test-docker`
-  builds real images (about 6 minutes, needs Docker, buildx and network); it is not in CI or the hook.
+  builds real images (several minutes each, needs Docker, buildx and network); `make test-scanners` runs
+  the VEX canary (needs trivy and grype). Neither is in CI's PR checks or the hook; a weekly workflow runs
+  the canary.
 - Branch per change off fresh `main`, PR only, **merge commits** (not squash), merge when CI is green.
   Delete the branch after merge. A schema change needs an Alembic migration
   (`uv run alembic revision --autogenerate`) and lands alone; a test fails on drift.
