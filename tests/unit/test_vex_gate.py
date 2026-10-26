@@ -9,13 +9,14 @@ from dabao import fakes
 from dabao.gates import GateConfig, GateInput, gate_scanners_clear
 from dabao.models import Advisory, Component, Finding, Patch, PatchSource
 
-ADV = Advisory(id="CVE-2022-48303")
+REF = "https://git.savannah.gnu.org/cgit/tar.git/commit/?id=3da78400"
+ADV = Advisory(id="CVE-2022-48303", fix_refs=(REF,))
 COMP = Component(stream="debian", package="tar", version="1.34+dfsg-1.2")
 PATCH = Patch(
     advisory_id=ADV.id,
     component=COMP,
     source=PatchSource.UPSTREAM_DERIVED,
-    upstream_ref="https://git.savannah.gnu.org/cgit/tar.git/commit/?id=3da78400",
+    upstream_ref=REF,
     diff="--- a/src/list.c\n+++ b/src/list.c\n@@ -1 +1 @@\n-a\n+b\n",
 )
 BEFORE, AFTER = "sha256:before", "sha256:after"
@@ -116,9 +117,29 @@ def test_a_scanner_without_vex_support_cannot_be_cleared_that_way(tmp_path: Path
 
 
 def test_an_alias_reported_instead_of_the_canonical_id_is_cleared_by_name(tmp_path: Path) -> None:
-    adv = Advisory(id=ADV.id, aliases=("GHSA-aaaa-bbbb-cccc",))
+    adv = Advisory(id=ADV.id, aliases=("GHSA-aaaa-bbbb-cccc",), fix_refs=(REF,))
     alias = Finding(advisory_id="GHSA-aaaa-bbbb-cccc", package="tar", fix_state="fixed")
     s1 = fakes.FakeScanner({BEFORE: [alias], AFTER: [alias, SIBLING]}, name="grype")
     s2 = fakes.FakeScanner({BEFORE: [alias], AFTER: [alias, SIBLING]}, name="trivy")
     r = gate_scanners_clear(gate_input(tmp_path, s1, s2, advisory=adv), ON)
     assert r.passed, r.reason
+
+
+def test_a_vex_needs_the_patch_ref_to_be_a_fix_reference_of_the_advisory(tmp_path: Path) -> None:
+    after = [TARGET, SIBLING]
+    other = PATCH.model_copy(
+        update={"upstream_ref": "https://git.savannah.gnu.org/cgit/tar.git/commit/?id=ffff0000"}
+    )
+    inp = gate_input(tmp_path, scanner("grype", after), scanner("trivy", after), patch=other)
+    r = gate_scanners_clear(inp, ON)
+    assert not r.passed and "not one of the advisory's fix references" in r.reason
+    assert list(tmp_path.iterdir()) == []  # no statement was written
+
+
+def test_a_vex_is_refused_when_the_feed_names_no_fix_reference(tmp_path: Path) -> None:
+    after = [TARGET, SIBLING]
+    inp = gate_input(
+        tmp_path, scanner("grype", after), scanner("trivy", after), advisory=Advisory(id=ADV.id)
+    )
+    r = gate_scanners_clear(inp, ON)
+    assert not r.passed and "names no fix reference" in r.reason

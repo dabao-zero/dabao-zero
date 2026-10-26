@@ -72,7 +72,7 @@ def pipeline(
 @pytest.fixture
 def pending(factory: sessionmaker[Session]) -> sessionmaker[Session]:
     with factory() as s:
-        s.add(AdvisoryRow(id="CVE-2024-0001"))
+        s.add(AdvisoryRow(id="CVE-2024-0001", fix_refs=SRC + "abc"))
         s.add(
             AffectedRow(
                 id=1,
