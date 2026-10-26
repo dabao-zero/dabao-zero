@@ -25,12 +25,25 @@ class FeedRecord:
     aliases: tuple[str, ...]
     package: str
     fixed_version: str | None  # None: no fix available yet, every version is affected
+    fix_refs: tuple[str, ...] = ()  # the feed's own links to the fix (OSV references of type FIX)
 
 
 def canonical_id(ids: list[str]) -> str:
     """CVE id if there is one (lowest, for determinism), else the first id given."""
     cves = sorted(i for i in ids if i.startswith("CVE-"))
     return cves[0] if cves else ids[0]
+
+
+def _osv_fix_refs(rec: dict[str, Any]) -> tuple[str, ...]:
+    refs = rec.get("references")
+    if not isinstance(refs, list):
+        return ()
+    urls = {
+        r["url"].strip()
+        for r in refs
+        if isinstance(r, dict) and r.get("type") == "FIX" and isinstance(r.get("url"), str)
+    }
+    return tuple(sorted(u for u in urls if u))
 
 
 def parse_osv(records: list[dict[str, Any]], ecosystem: str = "Debian:12") -> list[FeedRecord]:
@@ -47,6 +60,7 @@ def parse_osv(records: list[dict[str, Any]], ecosystem: str = "Debian:12") -> li
         ids = [rid, *[a for a in rec.get("aliases", []) if isinstance(a, str)]]
         canon = canonical_id(ids)
         aliases = tuple(sorted(set(ids) - {canon}))
+        fix_refs = _osv_fix_refs(rec)
         for aff in affected:
             pkg = aff.get("package", {}) if isinstance(aff, dict) else {}
             if pkg.get("ecosystem") != ecosystem or not pkg.get("name"):
@@ -56,7 +70,7 @@ def parse_osv(records: list[dict[str, Any]], ecosystem: str = "Debian:12") -> li
                 for event in rng.get("events", []):
                     if "fixed" in event:
                         fixed = event["fixed"]
-            out.append(FeedRecord(canon, aliases, pkg["name"], fixed))
+            out.append(FeedRecord(canon, aliases, pkg["name"], fixed, fix_refs))
     return out
 
 
@@ -132,7 +146,11 @@ def ingest(
                 counts["skipped_fixed"] += 1
                 continue
             if adv is None:
-                adv = AdvisoryRow(id=rec.id, aliases="\n".join(sorted(rec.aliases)))
+                adv = AdvisoryRow(
+                    id=rec.id,
+                    aliases="\n".join(sorted(rec.aliases)),
+                    fix_refs="\n".join(sorted(rec.fix_refs)),
+                )
                 session.add(adv)
                 session.flush()
                 counts["advisories"] += 1
@@ -141,6 +159,9 @@ def ingest(
                 extra = (ids - {adv.id}) - known
                 if extra:
                     adv.aliases = "\n".join(sorted(known | extra))
+                refs = {r for r in adv.fix_refs.split("\n") if r}
+                if set(rec.fix_refs) - refs:
+                    adv.fix_refs = "\n".join(sorted(refs | set(rec.fix_refs)))
             exists = session.scalar(
                 select(AffectedRow.id).where(
                     AffectedRow.advisory_id == adv.id,

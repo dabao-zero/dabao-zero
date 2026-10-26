@@ -9,6 +9,7 @@ import hashlib
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
+from urllib.parse import parse_qsl, urlencode, urlsplit
 
 from dabao.models import Advisory, Patch, PatchSource
 from dabao.seams import BuildDiffer, Scanner, SuiteRunner
@@ -46,6 +47,9 @@ class GateConfig:
     # ADR-0010: let the gate clear a CVE a scanner still reports with a VEX it issues. Off until the
     # evidence checks (fix reference of the advisory, upstream change contained in the patch) exist.
     vex_enabled: bool = False
+    # ADR-0010 check 1 for every patch, not only VEX ones: upstream_ref must be one of the
+    # advisory's own fix references from the feed, not just any URL on the allow-list.
+    require_fix_reference: bool = False
 
 
 @dataclass(frozen=True)
@@ -63,6 +67,45 @@ class GateInput:
     stream: str = ""
     vex_dir: Path | None = None
     now: float = 0.0
+
+
+def _parse_ref(url: str) -> tuple[str, str, str, str]:
+    """(host, path, other query, commit) of a reference; scheme, fragment, slash and .patch ignored.
+
+    The commit is the last path segment under /commit/ or the `id` query parameter (cgit).
+    """
+    parts = urlsplit(url.strip())
+    path = parts.path.rstrip("/").removesuffix(".patch").removesuffix(".diff")
+    query = dict(parse_qsl(parts.query))
+    commit = ""
+    if "id" in query:
+        commit = query.pop("id")
+    elif path.rpartition("/")[0].endswith(("/commit", "/commits")):
+        path, _, commit = path.rpartition("/")
+    return parts.netloc.lower(), path, urlencode(sorted(query.items())), commit.lower()
+
+
+def _same_ref(a: str, b: str) -> bool:
+    """Same reference, or same repository with one commit id a prefix (7+ hex) of the other."""
+    *where_a, commit_a = _parse_ref(a)
+    *where_b, commit_b = _parse_ref(b)
+    if where_a != where_b:
+        return False
+    if commit_a == commit_b:
+        return True
+    short, long = sorted((commit_a, commit_b), key=len)
+    return (
+        len(short) >= 7 and all(c in "0123456789abcdef" for c in short) and long.startswith(short)
+    )
+
+
+def fix_reference_problem(advisory: Advisory, ref: str) -> str:
+    """ADR-0010 check 1. "" when `ref` is one of the advisory's fix references from the feed."""
+    if not advisory.fix_refs:
+        return "the feed names no fix reference for this advisory"
+    if not any(_same_ref(ref, known) for known in advisory.fix_refs):
+        return f"{ref} is not one of the advisory's fix references"
+    return ""
 
 
 def _advisory_ids(advisory: Advisory) -> set[str]:
@@ -123,6 +166,9 @@ def _clear_with_vex(
     Returns "" when the scanner is clear with the VEX and the VEX changed nothing but the target
     CVE (ADR-0010 check 4); otherwise the reason it is not.
     """
+    problem = fix_reference_problem(inp.advisory, inp.patch.upstream_ref)
+    if problem:
+        return f"cannot issue a VEX: {problem}"
     if not inp.rebuilt_packages:
         return "cannot issue a VEX: no rebuilt packages are known"
     if inp.vex_dir is None:
@@ -211,6 +257,10 @@ def gate_provenance(inp: GateInput, cfg: GateConfig) -> GateResult:
         return GateResult(name, False, "patch has no upstream reference")
     if not any(ref.startswith(p) for p in cfg.provenance_allowlist):
         return GateResult(name, False, f"source not on the allow-list: {ref}")
+    if cfg.require_fix_reference:
+        problem = fix_reference_problem(inp.advisory, ref)
+        if problem:
+            return GateResult(name, False, problem)
     return GateResult(name, True, f"derived from {ref}")
 
 

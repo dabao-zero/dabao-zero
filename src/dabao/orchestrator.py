@@ -108,7 +108,11 @@ def _component(row: AffectedRow) -> Component:
 
 
 def _advisory(row: AdvisoryRow) -> Advisory:
-    return Advisory(id=row.id, aliases=tuple(a for a in row.aliases.split("\n") if a))
+    return Advisory(
+        id=row.id,
+        aliases=tuple(a for a in row.aliases.split("\n") if a),
+        fix_refs=tuple(r for r in row.fix_refs.split("\n") if r),
+    )
 
 
 def spent_last_month(session: Session, now: float) -> float:

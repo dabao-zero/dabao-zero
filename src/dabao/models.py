@@ -27,6 +27,8 @@ class Advisory(BaseModel):
 
     id: str  # canonical ID, e.g. CVE-2024-1234
     aliases: tuple[str, ...] = ()
+    # URLs the feed names as the fix (OSV references of type FIX); ADR-0010 check 1.
+    fix_refs: tuple[str, ...] = ()
 
 
 class Component(BaseModel):

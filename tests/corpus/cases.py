@@ -17,7 +17,11 @@ from dabao.seams import SuiteResult
 ALLOWED_SOURCE = "https://github.com/nginx/nginx/commit/"
 CFG = GateConfig(provenance_allowlist=(ALLOWED_SOURCE,), allowed_extra_paths=("var/lib/dpkg/",))
 
-ADV = Advisory(id="CVE-2024-0001", aliases=("GHSA-aaaa-bbbb-cccc",))
+ADV = Advisory(
+    id="CVE-2024-0001",
+    aliases=("GHSA-aaaa-bbbb-cccc",),
+    fix_refs=(ALLOWED_SOURCE + "abc123",),
+)
 COMP = Component(stream="debian", package="nginx", version="1.22.0-1")
 DIFF = "--- a/src/http/ngx_http_parse.c\n+++ b/src/http/ngx_http_parse.c\n@@ -1 +1 @@\n-x\n+y\n"
 PATCH = Patch(
@@ -143,6 +147,20 @@ def _bad_cases() -> list[BadCase]:
             replace(
                 g, patch=PATCH.model_copy(update={"upstream_ref": "https://evil.example/commit/1"})
             ),
+        ),
+        BadCase(
+            "allow-listed URL that is not a fix reference of this advisory (ADR-0010 check 1)",
+            "provenance",
+            replace(
+                g, patch=PATCH.model_copy(update={"upstream_ref": ALLOWED_SOURCE + "other999"})
+            ),
+            replace(CFG, require_fix_reference=True),
+        ),
+        BadCase(
+            "advisory with no fix reference in the feed (ADR-0010 check 1)",
+            "provenance",
+            replace(g, advisory=Advisory(id=ADV.id, aliases=ADV.aliases)),
+            replace(CFG, require_fix_reference=True),
         ),
         BadCase(
             "patch has no upstream reference",
