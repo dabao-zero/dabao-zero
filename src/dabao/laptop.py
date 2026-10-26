@@ -1,9 +1,11 @@
-"""Run Codex by hand on a laptop and write a candidate bundle (ADR-0009, docs/laptop-runbook.md).
+"""Run Codex or Claude Code by hand on a laptop and write a candidate bundle.
 
-A human starts one run for one advisory. Codex works in a throwaway copy of the source tree with a
-scrubbed environment, so it never sees GHCR, cosign, database or LLM-provider credentials. The only
-secret in reach is the Codex login itself, copied in for the run and deleted after. The output is a
-candidate bundle, never an artifact: `dabao attempt-import` and the gates decide what happens next.
+See ADR-0009, ADR-0013 and docs/laptop-runbook.md. A human starts one run for one advisory. The
+harness works in a throwaway copy of the source tree with a scrubbed environment, so it never sees
+GHCR, cosign, database or LLM-provider credentials. The only secret in reach is the harness login
+itself, copied in for the run and deleted after. The output is a candidate bundle, never an
+artifact: `dabao attempt-import` and the gates decide what happens next. No Anthropic SDK or API
+key is involved (ADR-0008): Claude Code is an external program the human runs.
 """
 
 from __future__ import annotations
@@ -40,6 +42,22 @@ OUTPUT_SCHEMA: dict[str, Any] = {
 }
 
 
+@dataclass(frozen=True)
+class Harness:
+    """Which program the human runs and where its login lives inside the sandbox."""
+
+    name: str
+    runner: Runner
+    config_env: str  # env var that points the program at its (scratch) config dir
+    login_name: str  # login file inside that dir
+
+
+CODEX = Harness("codex", Runner.MANUAL_CODEX, "CODEX_HOME", "auth.json")
+CLAUDE_CODE = Harness(
+    "claude-code", Runner.MANUAL_CLAUDE_CODE, "CLAUDE_CONFIG_DIR", ".credentials.json"
+)
+
+
 class LaptopAttemptError(Exception):
     """The run produced nothing usable; no bundle was written."""
 
@@ -73,11 +91,41 @@ def parse_codex_usage(log: str, wall_seconds: float) -> Usage:
     )
 
 
-def sandbox_env(environ: Mapping[str, str], home: Path, codex_home: Path) -> dict[str, str]:
+def parse_claude_output(raw: str) -> tuple[str, Usage | None]:
+    """Read `claude -p --output-format json`: the final message and the token counts.
+
+    Input tokens count fresh, cache-write and cache-read tokens together. A subscription run has no
+    per-token price, so cost_usd stays 0.0 (the list-price figure is in the run log).
+    """
+    try:
+        doc = json.loads(raw)
+    except ValueError as exc:
+        raise LaptopAttemptError(f"claude output is not JSON: {raw[-300:]!r}") from exc
+    if not isinstance(doc, dict):
+        raise LaptopAttemptError("claude output is not a JSON object")
+    if doc.get("is_error"):
+        raise LaptopAttemptError(f"claude reported an error: {str(doc.get('result'))[:500]}")
+    structured = doc.get("structured_output")
+    final = json.dumps(structured) if isinstance(structured, dict) else str(doc.get("result", ""))
+    u = doc.get("usage") or {}
+    usage = Usage(
+        tokens_in=int(u.get("input_tokens", 0))
+        + int(u.get("cache_creation_input_tokens", 0))
+        + int(u.get("cache_read_input_tokens", 0)),
+        tokens_out=int(u.get("output_tokens", 0)),
+        cost_usd=0.0,
+        wall_seconds=float(doc.get("duration_ms", 0)) / 1000,
+    )
+    return final, usage
+
+
+def sandbox_env(
+    environ: Mapping[str, str], home: Path, config_home: Path, config_env: str = "CODEX_HOME"
+) -> dict[str, str]:
     """An allowlist, not a denylist: a new secret variable cannot leak by being unlisted."""
     env = {k: environ[k] for k in ENV_ALLOWLIST if k in environ}
     env["HOME"] = str(home)
-    env["CODEX_HOME"] = str(codex_home)
+    env[config_env] = str(config_home)
     return env
 
 
@@ -123,6 +171,38 @@ def codex_command(
     return cmd
 
 
+CLAUDE_TOOLS = ("Read", "Edit", "Write", "Glob", "Grep")
+
+
+def claude_command(model: str | None, *, network: bool, budget_usd: float | None) -> list[str]:
+    """No Bash: Claude Code has no filesystem sandbox of its own, so a shell could read the real
+    home by absolute path. Reads, edits and (with --network) web fetches are all it gets; running
+    commands waits for the container wrapper (DAB-62). `dontAsk` denies anything not listed."""
+    tools = list(CLAUDE_TOOLS) + (["WebFetch"] if network else [])
+    cmd = [
+        "claude",
+        "-p",
+        "--output-format",
+        "json",
+        "--json-schema",
+        json.dumps(OUTPUT_SCHEMA),
+        "--permission-mode",
+        "dontAsk",
+        "--tools",
+        ",".join(tools),
+        "--allowedTools",
+        ",".join(tools),
+        "--strict-mcp-config",
+        "--disable-slash-commands",
+        "--no-session-persistence",
+    ]
+    if model:
+        cmd += ["--model", model]
+    if budget_usd is not None:
+        cmd += ["--max-budget-usd", f"{budget_usd:g}"]
+    return cmd
+
+
 def default_scratch_root() -> Path:
     """Under the user cache dir, never /tmp: Codex will not create its sandbox helper there."""
     base = os.environ.get("XDG_CACHE_HOME") or str(Path.home() / ".cache")
@@ -162,6 +242,44 @@ class ExecCodexRunner:
         )
 
 
+@dataclass(frozen=True)
+class ExecClaudeRunner:
+    """Runs the real `claude -p`. Needs Claude Code and a logged-in subscription, no API key."""
+
+    model: str | None = None
+    network: bool = False
+    timeout_s: float = 1800.0
+    budget_usd: float | None = None  # a guard on list-price spend; a subscription is not billed
+
+    def run(self, prompt: str, workdir: Path, env: dict[str, str]) -> CodexRun:
+        cmd = claude_command(self.model, network=self.network, budget_usd=self.budget_usd)
+        try:
+            proc = subprocess.run(
+                cmd + [prompt],
+                cwd=workdir,
+                env=env,
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=self.timeout_s,
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise LaptopAttemptError(f"claude timed out after {self.timeout_s:g}s") from exc
+        if proc.returncode != 0:
+            tail = (proc.stdout[-300:] + proc.stderr[-300:]).strip()
+            raise LaptopAttemptError(f"claude exited {proc.returncode}: {tail}")
+        final, usage = parse_claude_output(proc.stdout)
+        version = subprocess.run(
+            ["claude", "--version"], env=env, capture_output=True, text=True, check=False
+        ).stdout.split()
+        return CodexRun(
+            final_message=final,
+            log=proc.stdout,
+            version=version[0] if version else "unknown",
+            usage=usage,
+        )
+
+
 def _git(cwd: Path, *args: str) -> str:
     env = {
         "PATH": os.environ.get("PATH", ""),
@@ -188,15 +306,16 @@ def run_attempt(
     model: str,
     now: float,
     log_path: Path | None = None,
+    harness: Harness = CODEX,
 ) -> CandidateBundle:
     scratch_root.mkdir(parents=True, exist_ok=True)
     scratch = Path(tempfile.mkdtemp(prefix="dabao-attempt-", dir=scratch_root))
     try:
-        workdir, home, codex_home = scratch / "work", scratch / "home", scratch / "codex"
+        workdir, home, config_home = scratch / "work", scratch / "home", scratch / harness.name
         shutil.copytree(source_dir, workdir, ignore=shutil.ignore_patterns(".git"))
         home.mkdir()
-        codex_home.mkdir(mode=0o700)
-        login = codex_home / "auth.json"
+        config_home.mkdir(mode=0o700)
+        login = config_home / harness.login_name
         shutil.copyfile(auth_file, login)
         login.chmod(0o600)
         _git(workdir, "init", "-q")
@@ -204,7 +323,7 @@ def run_attempt(
         _git(workdir, "commit", "-q", "-m", "baseline")
         base = _git(workdir, "rev-parse", "HEAD").strip()
 
-        env = sandbox_env(environ, home, codex_home)
+        env = sandbox_env(environ, home, config_home, harness.config_env)
         run = runner.run(build_prompt(advisory_id, component), workdir, env)
 
         if log_path is not None:
@@ -213,7 +332,9 @@ def run_attempt(
         diff = _git(workdir, "diff", "--cached", "--binary", base)
         if not diff.strip():
             said = run.final_message.strip()[:800]
-            raise LaptopAttemptError(f"codex made no change; nothing to import. It said: {said}")
+            raise LaptopAttemptError(
+                f"{harness.name} made no change; nothing to import. It said: {said}"
+            )
         try:
             final = json.loads(run.final_message)
             ref, links = str(final["upstream_ref"]), tuple(str(x) for x in final["upstream_links"])
@@ -222,7 +343,7 @@ def run_attempt(
         try:
             bundle = CandidateBundle(
                 schema_version=BUNDLE_VERSION,
-                runner=Runner.MANUAL_CODEX,
+                runner=harness.runner,
                 patch=Patch(
                     advisory_id=advisory_id,
                     component=component,
@@ -232,7 +353,7 @@ def run_attempt(
                 ),
                 upstream_links=links,
                 run_log=run.log,
-                tool_versions={"codex": run.version},
+                tool_versions={harness.name: run.version},
                 model=model,
                 created_at=now,
                 usage=run.usage,
@@ -247,34 +368,56 @@ def run_attempt(
 
 def main(argv: Sequence[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="python -m dabao.laptop", description=__doc__)
+    p.add_argument("--harness", choices=["codex", "claude-code"], default="codex")
     p.add_argument("--source-dir", type=Path, required=True, help="unpacked source of the package")
     p.add_argument("--advisory", required=True, help="e.g. CVE-2024-1234")
     p.add_argument("--stream", default="debian")
     p.add_argument("--package", required=True)
     p.add_argument("--version", required=True)
     p.add_argument("--out", type=Path, required=True, help="where to write the bundle JSON")
-    p.add_argument("--model", default=None, help="passed to codex -m; default is Codex's own")
-    p.add_argument("--timeout", type=float, default=1800.0, help="seconds before codex is stopped")
-    p.add_argument("--network", action="store_true", help="let the sandbox reach the network")
-    p.add_argument("--log", type=Path, default=None, help="keep the Codex event log here")
-    p.add_argument("--codex-auth", type=Path, default=Path.home() / ".codex" / "auth.json")
+    p.add_argument("--model", default=None, help="passed to the harness; default is its own")
+    p.add_argument(
+        "--timeout", type=float, default=1800.0, help="seconds before the run is stopped"
+    )
+    p.add_argument("--network", action="store_true", help="let the run reach the network")
+    p.add_argument("--log", type=Path, default=None, help="keep the run log here")
+    p.add_argument("--budget-usd", type=float, default=None, help="claude-code only: spend guard")
+    p.add_argument(
+        "--login",
+        "--codex-auth",
+        dest="login",
+        type=Path,
+        default=None,
+        help="login file to copy in; default is the harness's own",
+    )
     args = p.parse_args(argv)
-    if not args.codex_auth.is_file():
-        print(json.dumps({"error": f"no Codex login at {args.codex_auth}; run `codex login`"}))
+    harness = CLAUDE_CODE if args.harness == "claude-code" else CODEX
+    login = args.login or (
+        Path.home() / (".claude" if harness is CLAUDE_CODE else ".codex") / harness.login_name
+    )
+    if not login.is_file():
+        hint = "run `claude` and log in" if harness is CLAUDE_CODE else "run `codex login`"
+        print(json.dumps({"error": f"no {harness.name} login at {login}; {hint}"}))
         return 2
+    runner: CodexRunner = (
+        ExecClaudeRunner(args.model, args.network, args.timeout, args.budget_usd)
+        if harness is CLAUDE_CODE
+        else ExecCodexRunner(model=args.model, network=args.network, timeout_s=args.timeout)
+    )
     try:
         bundle = run_attempt(
-            ExecCodexRunner(model=args.model, network=args.network, timeout_s=args.timeout),
+            runner,
             source_dir=args.source_dir,
             advisory_id=args.advisory,
             component=Component(stream=args.stream, package=args.package, version=args.version),
             out_path=args.out,
-            auth_file=args.codex_auth,
+            auth_file=login,
             environ=os.environ,
             scratch_root=default_scratch_root(),
-            model=args.model or "codex-default",
+            model=args.model or f"{harness.name}-default",
             now=time.time(),
             log_path=args.log,
+            harness=harness,
         )
     except LaptopAttemptError as exc:
         print(json.dumps({"error": str(exc)}))

@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { AdvisoryDetail } from "../lib/api";
   import { GATE_LABELS, parseDiff } from "../lib/diff";
-  import { agentRunSummary, fixHref, imageHref } from "../lib/format";
+  import { agentRunSummary, fixHref, imageHref, isManualRun } from "../lib/format";
   import Icon from "../components/Icon.svelte";
   import Receipt from "../components/Receipt.svelte";
   import StatusPill from "../components/StatusPill.svelte";
@@ -41,7 +41,7 @@
   {#if runSummary}
     <p class="ts-body-medium muted" style="margin-top: 4px;">Agent run: {runSummary}</p>
   {/if}
-  {#if attempt?.runner === "manual_codex"}
+  {#if isManualRun(attempt?.runner)}
     <p class="ts-body-medium muted" style="margin-top: 4px;">Agent-patched, run started by the maintainer. The same automatic checks decided it.</p>
   {/if}
 

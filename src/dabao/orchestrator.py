@@ -77,7 +77,8 @@ class Pipeline:
     gates: GateConfig = field(default_factory=GateConfig)
     limits: Limits = field(default_factory=Limits)
     owner: str = "orchestrator-1"
-    runner: str = "agent"  # recorded on every attempt; "manual_codex" for imported bundles
+    # recorded on every attempt; "manual_codex" or "manual_claude_code" for imported bundles
+    runner: str = "agent"
     # ADR-0010: which binary packages the build rebuilt, and where the gate may write a VEX.
     rebuilt: Callable[[str], Sequence[tuple[str, str]]] | None = None
     vex_dir: Path | None = None
