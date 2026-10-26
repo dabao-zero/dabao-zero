@@ -39,6 +39,12 @@ class Scanner(Protocol):
     def scan(self, image_digest: str) -> list[Finding]: ...
 
 
+class UpstreamFetcher(Protocol):
+    def commit_diff(self, ref: str) -> str | None:
+        """The patch text of the upstream commit `ref`, or None when it cannot be read."""
+        ...
+
+
 class Registry(Protocol):
     def push(self, image_digest: str, tag: str) -> None: ...
 

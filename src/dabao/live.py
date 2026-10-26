@@ -14,9 +14,12 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
+from urllib.request import Request, urlopen
 
 from dabao.models import Finding
 from dabao.seams import SuiteResult
+from dabao.upstream import patch_url
 
 Runner = Callable[[list[str]], subprocess.CompletedProcess[bytes]]
 
@@ -308,3 +311,52 @@ class SmokeSuiteRunner:
                     return SuiteResult(False, f"command failed: {command}")
                 return None  # the build itself could not run; that is not a failing test
         return SuiteResult(True, f"{len(self.commands)} smoke command(s) passed")
+
+
+MAX_UPSTREAM_BYTES = 2_000_000
+
+
+def _site(host: str) -> str:
+    """The last two labels of a host: enough to tell savannah.gnu.org from an unrelated redirect."""
+    return ".".join(host.lower().split(".")[-2:])
+
+
+@dataclass
+class HttpUpstreamFetcher:
+    """Reads the raw patch of an upstream commit, only from hosts on the provenance allow-list.
+
+    Anything it cannot read (unknown host, error, redirect to another site, oversized answer) is
+    None, which the gate treats as a failure (ADR-0010 check 2).
+    """
+
+    allowlist: tuple[str, ...]
+    timeout_s: float = 60.0  # savannah answers slowly under load
+    opener: Callable[[str, float], tuple[str, bytes]] | None = (
+        None  # (url, timeout) -> (final url, body)
+    )
+
+    def _open(self, url: str) -> tuple[str, bytes]:
+        if self.opener is not None:
+            return self.opener(url, self.timeout_s)
+        req = Request(url, headers={"User-Agent": "dabao-zero-gate"})  # noqa: S310 - https only, below
+        with urlopen(req, timeout=self.timeout_s) as resp:  # noqa: S310
+            return resp.geturl(), resp.read(MAX_UPSTREAM_BYTES + 1)
+
+    def commit_diff(self, ref: str) -> str | None:
+        if not any(ref.startswith(p) for p in self.allowlist):
+            return None
+        url = patch_url(ref)
+        if url is None or urlsplit(url).scheme != "https":
+            return None
+        try:
+            final, body = self._open(url)
+        except OSError:
+            return None
+        if _site(urlsplit(final).netloc) != _site(urlsplit(url).netloc):
+            return None
+        if len(body) > MAX_UPSTREAM_BYTES:
+            return None
+        try:
+            return body.decode()
+        except UnicodeDecodeError:
+            return None

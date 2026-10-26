@@ -38,6 +38,7 @@ from dabao.seams import (
     Scanner,
     Signer,
     SuiteRunner,
+    UpstreamFetcher,
 )
 from dabao.signing import SigningRefused
 
@@ -82,6 +83,7 @@ class Pipeline:
     # ADR-0010: which binary packages the build rebuilt, and where the gate may write a VEX.
     rebuilt: Callable[[str], Sequence[tuple[str, str]]] | None = None
     vex_dir: Path | None = None
+    upstream: UpstreamFetcher | None = None  # ADR-0010 check 2
 
 
 class RecordingScanner:
@@ -219,6 +221,7 @@ def _attempt(session: Session, p: Pipeline, affected_id: int) -> Outcome:
                 recorders,
                 p.suite_runner,
                 p.differ,
+                upstream=p.upstream,
                 rebuilt_packages=tuple(p.rebuilt(after)) if p.rebuilt else (),
                 stream=component.stream,
                 vex_dir=p.vex_dir,

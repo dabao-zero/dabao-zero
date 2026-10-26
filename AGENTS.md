@@ -12,8 +12,10 @@ agent client and its sandbox toolbox (`toolbox.py`), regctl package inventory, g
 manual Codex attempts (`bundle.py`, `manual.py`, `laptop.py`, ADR-0009), distro adapters for Debian and
 Alpine (`debian.py`, `alpine.py`, shared `buildx.py`: reproducible OCI builds of one patched package),
 live gate parts (`live.py`: Trivy and Grype, OCI differ, smoke runner) and OpenVEX (`vex.py`, ADR-0010;
-the gate's VEX clearing is behind `GateConfig.vex_enabled`, off). `scripts/e1_replay.py` wires a live
-Debian pipeline end to end. **Not built:** the Wolfi adapter, the VEX evidence checks (DAB-70, DAB-71),
+the gate's VEX clearing is behind `GateConfig.vex_enabled`, off; its evidence checks are built: the
+patch ref must be a feed fix reference, `upstream.py` checks the upstream commit is contained in the
+patch, `require_fix_reference` and `require_containment` extend both to every patch, off).
+`scripts/e1_replay.py` wires a live Debian pipeline end to end. **Not built:** the Wolfi adapter,
 real cosign signing and registry publishing, live feed fetchers, a network namespace around the agent
 sandbox, anything that needs a live LLM (no key is configured).
 

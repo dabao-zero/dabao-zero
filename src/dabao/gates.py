@@ -12,7 +12,8 @@ from pathlib import Path
 from urllib.parse import parse_qsl, urlencode, urlsplit
 
 from dabao.models import Advisory, Patch, PatchSource
-from dabao.seams import BuildDiffer, Scanner, SuiteRunner
+from dabao.seams import BuildDiffer, Scanner, SuiteRunner, UpstreamFetcher
+from dabao.upstream import containment_problem
 from dabao.vex import VexStatement, write_openvex
 
 GATE_NAMES = ("advisory_present_before", "scanners_clear", "tests_pass", "build_diff", "provenance")
@@ -50,6 +51,9 @@ class GateConfig:
     # ADR-0010 check 1 for every patch, not only VEX ones: upstream_ref must be one of the
     # advisory's own fix references from the feed, not just any URL on the allow-list.
     require_fix_reference: bool = False
+    # ADR-0010 check 2 for every patch: the upstream commit, fetched by the gate, must be contained
+    # in the patch diff. Always required for a VEX.
+    require_containment: bool = False
 
 
 @dataclass(frozen=True)
@@ -61,6 +65,7 @@ class GateInput:
     scanners: Sequence[Scanner] = field(default_factory=tuple)
     suite_runner: SuiteRunner | None = None
     differ: BuildDiffer | None = None
+    upstream: UpstreamFetcher | None = None  # reads the commit the patch says it derives from
     # What a VEX statement needs (ADR-0010): which binary packages were rebuilt, in which stream, a
     # directory to write the document in, and the time to put in it.
     rebuilt_packages: tuple[tuple[str, str], ...] = ()
@@ -106,6 +111,18 @@ def fix_reference_problem(advisory: Advisory, ref: str) -> str:
     if not any(_same_ref(ref, known) for known in advisory.fix_refs):
         return f"{ref} is not one of the advisory's fix references"
     return ""
+
+
+def upstream_problem(inp: GateInput) -> str:
+    """ADR-0010 check 2. "" when the upstream commit is contained in the patch; an unreadable
+    commit fails closed."""
+    ref = inp.patch.upstream_ref
+    if inp.upstream is None:
+        return "no way to read the upstream commit"
+    text = inp.upstream.commit_diff(ref)
+    if text is None:
+        return f"could not read the upstream commit {ref}"
+    return containment_problem(text, inp.patch.diff)
 
 
 def _advisory_ids(advisory: Advisory) -> set[str]:
@@ -167,6 +184,9 @@ def _clear_with_vex(
     CVE (ADR-0010 check 4); otherwise the reason it is not.
     """
     problem = fix_reference_problem(inp.advisory, inp.patch.upstream_ref)
+    if problem:
+        return f"cannot issue a VEX: {problem}"
+    problem = upstream_problem(inp)
     if problem:
         return f"cannot issue a VEX: {problem}"
     if not inp.rebuilt_packages:
@@ -259,6 +279,10 @@ def gate_provenance(inp: GateInput, cfg: GateConfig) -> GateResult:
         return GateResult(name, False, f"source not on the allow-list: {ref}")
     if cfg.require_fix_reference:
         problem = fix_reference_problem(inp.advisory, ref)
+        if problem:
+            return GateResult(name, False, problem)
+    if cfg.require_containment:
+        problem = upstream_problem(inp)
         if problem:
             return GateResult(name, False, problem)
     return GateResult(name, True, f"derived from {ref}")
