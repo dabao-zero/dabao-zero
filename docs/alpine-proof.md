@@ -9,7 +9,7 @@ DAB-75, 2026-10-25. Tests the central bet of ADR-0011: on Alpine, a stock scan g
 vulnerable to `CVE-2026-111497` (HIGH), fixed in `1.2.1-r0`. The spike rebuilt Alpine's own `brotli` recipe (`aports`
 branch `3.24-stable`, `main/brotli`, `1.2.1-r0`) with `abuild` in an Alpine 3.24 container, using the full recipe (its
 14 C tests and the python tests pass), signed it with a throwaway key, installed the `brotli-libs` package into that
-image, and removed the key again. The apk manager reported `Upgrading brotli-libs (1.2.0-r1 -> 1.2.1-r0)`.
+image. The apk manager reported `Upgrading brotli-libs (1.2.0-r1 -> 1.2.1-r0)`.
 The resulting image digest was `sha256:f8820f41…c0cc4cc4`.
 
 ## Result (Trivy 0.70.0 and Grype 0.121.0, no VEX, no configuration)
@@ -35,4 +35,8 @@ from Alpine's own feed.
   them. Whether to document the Grype setting that turns CPE matching off, or to ask upstream whether these should be
   listed, is open (DAB-77 keeps them visible in the ledger).
 - The build was not checked for reproducibility. `abuild` output is not assumed byte-identical between runs.
-- The throwaway key was trusted only while installing; the image carries no extra key.
+- **Correction (2026-10-25).** An earlier version of this note said the throwaway signing key was removed after the
+  install. It was not: the key was named `-6addd9e6.rsa.pub` (the build had no `$USER`), the cleanup looked for
+  `builder-*`, and the image kept the key in `/etc/apk/keys`. The scan result is unaffected, but the spike image was
+  not clean. The spike Dockerfile and the adapter (`dabao.alpine`) now remove every copied key by its own name, and a
+  Docker test checks that no key is left in the layers the build adds.
