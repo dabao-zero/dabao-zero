@@ -9,6 +9,11 @@ from dabao import fakes
 from dabao.gates import GateConfig, GateInput, gate_scanners_clear
 from dabao.models import Advisory, Component, Finding, Patch, PatchSource
 
+FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
+DEBIAN_COPY = (
+    Path(__file__).resolve().parents[1] / "integration/fixtures/tar-CVE-2022-48303.diff"
+).read_text()
+UPSTREAM = (FIXTURES / "tar-3da78400-upstream.patch").read_text()
 REF = "https://git.savannah.gnu.org/cgit/tar.git/commit/?id=3da78400"
 ADV = Advisory(id="CVE-2022-48303", fix_refs=(REF,))
 COMP = Component(stream="debian", package="tar", version="1.34+dfsg-1.2")
@@ -17,7 +22,7 @@ PATCH = Patch(
     component=COMP,
     source=PatchSource.UPSTREAM_DERIVED,
     upstream_ref=REF,
-    diff="--- a/src/list.c\n+++ b/src/list.c\n@@ -1 +1 @@\n-a\n+b\n",
+    diff=DEBIAN_COPY,
 )
 BEFORE, AFTER = "sha256:before", "sha256:after"
 TARGET = Finding(advisory_id=ADV.id, package="tar", fix_state="fixed")
@@ -40,6 +45,7 @@ def gate_input(tmp_path: Path, *scanners: fakes.FakeScanner, **over: object) -> 
         rebuilt_packages=(("tar", "1.34+dfsg-1.2+dabao1"),),
         stream="debian",
         vex_dir=tmp_path,
+        upstream=fakes.FakeUpstream({REF: UPSTREAM}),
         now=1_792_800_000.0,
     )
     return replace(base, **over)  # type: ignore[arg-type]
@@ -143,3 +149,33 @@ def test_a_vex_is_refused_when_the_feed_names_no_fix_reference(tmp_path: Path) -
     )
     r = gate_scanners_clear(inp, ON)
     assert not r.passed and "names no fix reference" in r.reason
+
+
+def test_a_vex_needs_the_upstream_commit_to_be_contained_in_the_patch(tmp_path: Path) -> None:
+    after = [TARGET, SIBLING]
+    other = PATCH.model_copy(
+        update={"diff": "--- a/src/list.c\n+++ b/src/list.c\n@@ -1 +1 @@\n-a\n+b\n"}
+    )
+    inp = gate_input(tmp_path, scanner("grype", after), scanner("trivy", after), patch=other)
+    r = gate_scanners_clear(inp, ON)
+    assert not r.passed and "lacks upstream's changed line" in r.reason
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_an_unreadable_upstream_commit_fails_closed(tmp_path: Path) -> None:
+    after = [TARGET, SIBLING]
+    inp = gate_input(
+        tmp_path,
+        scanner("grype", after),
+        scanner("trivy", after),
+        upstream=fakes.FakeUpstream({}),
+    )
+    r = gate_scanners_clear(inp, ON)
+    assert not r.passed and "could not read the upstream commit" in r.reason
+
+
+def test_without_any_way_to_read_upstream_a_vex_is_refused(tmp_path: Path) -> None:
+    after = [TARGET, SIBLING]
+    inp = gate_input(tmp_path, scanner("grype", after), scanner("trivy", after), upstream=None)
+    r = gate_scanners_clear(inp, ON)
+    assert not r.passed and "no way to read the upstream commit" in r.reason

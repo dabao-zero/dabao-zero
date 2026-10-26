@@ -163,6 +163,18 @@ def _bad_cases() -> list[BadCase]:
             replace(CFG, require_fix_reference=True),
         ),
         BadCase(
+            "patch changes other lines than the upstream commit it cites (ADR-0010 check 2)",
+            "provenance",
+            replace(g, upstream=fakes.FakeUpstream({PATCH.upstream_ref: DIFF.replace("+y", "+z")})),
+            replace(CFG, require_containment=True),
+        ),
+        BadCase(
+            "upstream commit cannot be read (ADR-0010 check 2)",
+            "provenance",
+            replace(g, upstream=fakes.FakeUpstream({})),
+            replace(CFG, require_containment=True),
+        ),
+        BadCase(
             "patch has no upstream reference",
             "provenance",
             replace(g, patch=PATCH.model_copy(update={"upstream_ref": ""})),

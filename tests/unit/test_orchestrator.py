@@ -374,6 +374,7 @@ def vex_pipeline(tmp_path: Path, *, enabled: bool) -> Pipeline:
         gates=replace(CFG, vex_enabled=enabled),
         rebuilt=lambda digest: [("nginx", "1.22.0-1-dabao1")],
         vex_dir=tmp_path,
+        upstream=fakes.FakeUpstream({SRC + "abc": DIFF}),
     )
 
 

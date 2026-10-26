@@ -125,3 +125,15 @@ class FakeBuildDiffer:
 
     def changed_files(self, before_digest: str, after_digest: str) -> list[str] | None:
         return self.diffs.get((before_digest, after_digest))
+
+
+@dataclass
+class FakeUpstream:
+    """Upstream commits by reference; an unknown reference is unreadable (None)."""
+
+    diffs: dict[str, str] = field(default_factory=dict)
+    asked: list[str] = field(default_factory=list)
+
+    def commit_diff(self, ref: str) -> str | None:
+        self.asked.append(ref)
+        return self.diffs.get(ref)
