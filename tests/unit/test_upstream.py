@@ -182,3 +182,27 @@ def test_provenance_with_the_flag_passes_when_contained_and_fails_when_not() -> 
 def test_default_config_does_not_require_it() -> None:
     assert GateConfig().require_containment is False
     assert ADV.fix_refs and PATCH.upstream_ref in ADV.fix_refs
+
+
+def test_the_fetcher_retries_a_flaky_host_and_then_gives_up() -> None:
+    calls: list[str] = []
+    waited: list[float] = []
+
+    def flaky(url: str, timeout: float) -> tuple[str, bytes]:
+        calls.append(url)
+        if len(calls) < 3:
+            raise OSError("502")
+        return url, UPSTREAM.encode()
+
+    f = HttpUpstreamFetcher(SAVANNAH, opener=flaky, sleep=waited.append)
+    assert f.commit_diff(SAV_REF) == UPSTREAM
+    assert len(calls) == 3 and waited == [5.0, 10.0]
+
+    def down(url: str, timeout: float) -> tuple[str, bytes]:
+        raise OSError("down")
+
+    waited.clear()
+    assert (
+        HttpUpstreamFetcher(SAVANNAH, opener=down, sleep=waited.append).commit_diff(SAV_REF) is None
+    )
+    assert waited == [5.0, 10.0]  # two waits between three attempts, none after the last

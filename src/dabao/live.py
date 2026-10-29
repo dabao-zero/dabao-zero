@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import subprocess
 import tarfile
+import time
 import tempfile
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field, replace
@@ -332,6 +333,9 @@ class HttpUpstreamFetcher:
 
     allowlist: tuple[str, ...]
     timeout_s: float = 60.0  # savannah answers slowly under load
+    attempts: int = 3  # savannah also answers 502 and drops connections; a gate needs a verdict
+    backoff_s: float = 5.0
+    sleep: Callable[[float], None] = time.sleep
     opener: Callable[[str, float], tuple[str, bytes]] | None = (
         None  # (url, timeout) -> (final url, body)
     )
@@ -349,9 +353,14 @@ class HttpUpstreamFetcher:
         url = patch_url(ref)
         if url is None or urlsplit(url).scheme != "https":
             return None
-        try:
-            final, body = self._open(url)
-        except OSError:
+        for attempt in range(self.attempts):
+            try:
+                final, body = self._open(url)
+                break
+            except OSError:  # includes URLError, HTTPError (502) and timeouts
+                if attempt + 1 < self.attempts:
+                    self.sleep(self.backoff_s * (attempt + 1))
+        else:
             return None
         if _site(urlsplit(final).netloc) != _site(urlsplit(url).netloc):
             return None
