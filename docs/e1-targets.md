@@ -63,11 +63,11 @@ there. Debian's urgency is "not yet assigned" for most, so none is known to be h
 
 | # | Package (base version) | CVE | Commits | Source files / lines | Why |
 |---|---|---|---|---|---|
-| 1 | libtasn1-6 (4.19.0-2) | CVE-2025-13151 | 1 | 1 / 2 | Smallest fix, small package, fast build. The advisory says v4.20.0 is affected, so check first that 4.19.0 has the bug |
-| 2 | util-linux (2.38.1-5) | CVE-2025-14104 | 2 | 1 / 12 | Smallest multi-commit case: exercises "every listed commit must be contained" |
+| 1 | libtasn1-6 (4.19.0-2) | CVE-2025-13151 | 1 | 1 / 2 | Smallest fix, small package, fast build. 4.19.0 has the same declaration. Run 2026-10-30: all gates pass |
+| 2 | util-linux (2.38.1-5) | CVE-2025-14104 | 2 | 1 / 12 | **Wrong target:** Debian's note says the affected code (chsh/chfn) is not built in any Debian binary of src:util-linux. See `docs/e1-unfixed-replays.md` |
 | 3 | util-linux | CVE-2026-3184 | 1 | 1 / 4 | One commit, 4 lines, same package build as #2 |
 | 4 | p11-kit (0.24.1-2) | CVE-2026-18938 | 1 | 1 / 6 | Small, different package |
-| 5 | pam (1.5.2-6) | CVE-2024-10041 | 2 | 3 / 52 | Two commits across three files; a more realistic backport |
+| 5 | pam (1.5.2-6) | CVE-2024-10041 | 2 | 3 / 52 | Two commits across three files; run 2026-10-30: the agent carried one, the multi-commit rule refused it |
 | 6 | gnupg2 (2.2.40-1.1) | CVE-2026-57062 | 1 | 1 / 9 | Small, security-relevant parser fix |
 
 Also readable and small, in reserve: util-linux CVE-2026-78408 (1 file, 10 lines), systemd CVE-2026-15059 (2 commits,
@@ -80,3 +80,8 @@ Avoid for a first run:
 - **Anything on savannah or sourceware** (coreutils, diffutils, gzip, acl, attr, bzip2, tar CVE-2026-5704, 14 CVEs):
   18 commits could not be read from this machine on 2026-10-30 (the cgit hosts are IPv6-only here), so they were not
   measured. `sourceware.org` (bzip2) is also not on the host allow-list.
+
+Correction (2026-10-30): the shortlist was built from commit counts and sizes only. Before choosing a target, read the
+tracker's non-URL `NOTE:` lines too: Debian records there when the code is not built in a binary package
+(CVE-2025-14104 and CVE-2022-0563 for util-linux, CVE-2023-45853 for zlib). Results of the first replays are in
+`docs/e1-unfixed-replays.md`.
