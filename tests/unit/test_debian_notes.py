@@ -145,3 +145,34 @@ def test_a_stream_cut_short_is_retried_not_taken_for_no_notes(
             fetch_debian_fix_refs({"CVE-2024-12133"}, opener=always_cut, sleep=lambda s: None) == {}
         )
     assert "ended before" in caplog.text
+
+
+def test_a_download_cut_part_way_resumes_from_the_last_whole_line() -> None:
+    from dabao.live import resuming_lines
+
+    data = [b"line one\n", b"line two\n", b"line three\n", b"line four\n"]
+    starts: list[int] = []
+    cuts = [2, 1]  # the first read dies after 2 lines, the second after 1 more
+
+    def open_at(offset: int) -> Iterator[bytes]:
+        starts.append(offset)
+        body = b"".join(data)[offset:].splitlines(keepends=True)
+        n = cuts.pop(0) if cuts else len(body)
+        yield from body[:n]
+        if n < len(body):
+            raise OSError("connection reset")
+
+    got = list(resuming_lines(open_at, sleep=lambda s: None))
+    assert got == data  # nothing repeated, nothing lost
+    assert starts == [0, len(data[0]) + len(data[1]), len(data[0]) + len(data[1]) + len(data[2])]
+
+
+def test_a_download_that_keeps_failing_gives_up() -> None:
+    from dabao.live import resuming_lines
+
+    def always(offset: int) -> Iterator[bytes]:
+        raise OSError("down")
+        yield b""
+
+    with pytest.raises(OSError):
+        list(resuming_lines(always, max_resumes=3, sleep=lambda s: None))

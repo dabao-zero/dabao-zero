@@ -12,7 +12,7 @@ import subprocess
 import tarfile
 import tempfile
 import time
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Iterable, Iterator, Mapping
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
@@ -392,6 +392,32 @@ class HttpUpstreamFetcher:
             return None
 
 
+def resuming_lines(
+    open_at: Callable[[int], Iterable[bytes]],
+    max_resumes: int = 20,
+    backoff_s: float = 2.0,
+    sleep: Callable[[float], None] = time.sleep,
+) -> Iterator[bytes]:
+    """Lines of a long download that survive the connection being cut.
+
+    `open_at(offset)` starts reading at a byte offset. After an error the read resumes from the end
+    of the last line handed out, so no line is repeated or split. The Debian CVE list is 65 MB and
+    the host drops long transfers; starting over each time never reaches the older entries.
+    """
+    offset = resumes = 0
+    while True:
+        try:
+            for line in open_at(offset):
+                offset += len(line)
+                yield line
+            return
+        except OSError:
+            resumes += 1
+            if resumes > max_resumes:
+                raise
+            sleep(backoff_s)
+
+
 DEBIAN_CVE_LIST = (
     "https://salsa.debian.org/security-tracker-team/security-tracker/-/raw/master/data/CVE/list"
 )
@@ -416,9 +442,16 @@ def fetch_debian_fix_refs(
         return {}
 
     def default_open(u: str, timeout: float) -> Iterable[bytes]:
-        req = Request(u, headers={"User-Agent": "dabao-zero"})  # noqa: S310
-        with urlopen(req, timeout=timeout) as resp:  # noqa: S310
-            yield from resp
+        def open_at(offset: int) -> Iterable[bytes]:
+            headers = {"User-Agent": "dabao-zero"}
+            if offset:
+                headers["Range"] = f"bytes={offset}-"
+            with urlopen(Request(u, headers=headers), timeout=timeout) as resp:  # noqa: S310
+                if offset and resp.status != 206:
+                    raise OSError("the server ignored the Range request")
+                yield from resp
+
+        return resuming_lines(open_at, sleep=sleep)
 
     open_lines = opener or default_open
     last: OSError | None = None
