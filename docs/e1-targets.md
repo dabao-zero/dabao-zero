@@ -47,3 +47,36 @@ Variety on purpose: a one-hunk fix, a multi-line fix in another file, and a two-
   empty `config.json` (a broken credential helper). Keep that in mind for the integration test.
 - "Fixed in Debian" is the tracker's `fixed_version` for bookworm. Upstream versions that carry the fix:
   tar 1.35, libtasn1 4.20.0.
+
+## Shortlist: CVEs Debian has not fixed (2026-10-30)
+
+For the first replay of the case the product exists for: a CVE the Debian tracker lists as `open` on bookworm, in a
+package this base image contains, with fix commit(s) named in the tracker's notes (ADR-0010 check 1). tar's and
+libtasn1 CVE-2024-12133 above are already fixed in bookworm (`+deb12u1`, DSA-5863-1), so they prove the mechanics
+but not this case.
+
+How it was built: tracker JSON and `data/CVE/list` read 2026-10-30; 95 open bookworm CVEs in the base image's 23
+source packages, 35 of them with a named commit (37%, in line with the 33% across all of bookworm); each commit read
+through `HttpUpstreamFetcher` and measured (source files and changed lines, tests and docs excluded).
+**Not checked:** whether each commit applies to the base's older version, and whether the vulnerable code exists
+there. Debian's urgency is "not yet assigned" for most, so none is known to be high severity.
+
+| # | Package (base version) | CVE | Commits | Source files / lines | Why |
+|---|---|---|---|---|---|
+| 1 | libtasn1-6 (4.19.0-2) | CVE-2025-13151 | 1 | 1 / 2 | Smallest fix, small package, fast build. The advisory says v4.20.0 is affected, so check first that 4.19.0 has the bug |
+| 2 | util-linux (2.38.1-5) | CVE-2025-14104 | 2 | 1 / 12 | Smallest multi-commit case: exercises "every listed commit must be contained" |
+| 3 | util-linux | CVE-2026-3184 | 1 | 1 / 4 | One commit, 4 lines, same package build as #2 |
+| 4 | p11-kit (0.24.1-2) | CVE-2026-18938 | 1 | 1 / 6 | Small, different package |
+| 5 | pam (1.5.2-6) | CVE-2024-10041 | 2 | 3 / 52 | Two commits across three files; a more realistic backport |
+| 6 | gnupg2 (2.2.40-1.1) | CVE-2026-57062 | 1 | 1 / 9 | Small, security-relevant parser fix |
+
+Also readable and small, in reserve: util-linux CVE-2026-78408 (1 file, 10 lines), systemd CVE-2026-15059 (2 commits,
+8 lines; systemd is a long build), perl CVE-2026-9538 (1 file, 15 lines; perl is a long build).
+
+Avoid for a first run:
+- **zlib CVE-2023-45853**: the fix is in `contrib/minizip`, which Debian's `zlib1g` does not ship, so the patch would
+  change nothing in the image. Worth a test of its own later (the gate must not call that a fix).
+- **zlib CVE-2026-27171**: the commit is 11,182 lines. **gcc-12 CVE-2026-95619**: 4 commits, 192 lines, a toolchain.
+- **Anything on savannah or sourceware** (coreutils, diffutils, gzip, acl, attr, bzip2, tar CVE-2026-5704, 14 CVEs):
+  18 commits could not be read from this machine on 2026-10-30 (the cgit hosts are IPv6-only here), so they were not
+  measured. `sourceware.org` (bzip2) is also not on the host allow-list.
