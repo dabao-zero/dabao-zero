@@ -97,7 +97,7 @@ RUN set -eu; cd /tmp/dabao-debs; keep=""; \\
       if [ "$st" = "install ok installed" ]; then keep="$keep ./$d"; fi; \\
     done; \\
     [ -n "$keep" ] || {{ echo "no rebuilt package is in the base image" >&2; exit 1; }}; \\
-    dpkg --log=/dev/null -i $keep; \\
+    dpkg --log=/dev/null -i $keep || dpkg --log=/dev/null -i $keep; \\
     cd /; rm -rf /tmp/dabao-debs; rm -f /var/log/alternatives.log
 """
 

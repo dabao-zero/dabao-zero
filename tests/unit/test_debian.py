@@ -171,3 +171,12 @@ def test_only_packages_the_base_really_has_installed_are_replaced() -> None:
     df = render_dockerfile(COMP, BASE)
     assert "install ok installed" in df
     assert 'if dpkg-query -W "$n" >/dev/null' not in df
+
+
+def test_a_package_that_pre_depends_on_another_rebuilt_one_still_installs() -> None:
+    """libpam-modules Pre-Depends on libpam-modules-bin (= same version). One `dpkg -i` over both
+    fails when the first is unpacked before the second is configured; a second pass succeeds, and a
+    real error still fails both."""
+    df = render_dockerfile(COMP, BASE)
+    first = "dpkg --log=/dev/null -i $keep || dpkg --log=/dev/null -i $keep;"
+    assert first in df
