@@ -31,3 +31,22 @@ savannah commit returns "" for it, so the gate's check 2 passes on a real agent 
   Claude Code did not build or test.
 - The run read Debian's patch listing on sources.debian.org as well as the upstream commit. The bundle's
   `upstream_ref` is the upstream commit, as ADR-0003 requires.
+
+## Gate run (2026-10-30, `scripts/e1_replay.py --vex`, live Debian pipeline)
+
+Real image builds, Trivy 0.70.0 and Grype 0.121.0, the savannah commit fetched live, fix references read live from
+OSV. 320 s. The attempt is recorded as `manual_claude_code`.
+
+| Gate | Result |
+|------|--------|
+| advisory present before | pass |
+| scanners clear | **fail**: `cannot issue a VEX: <the savannah commit> is not one of the advisory's fix references` |
+| tests pass | pass (smoke commands) |
+| build diff | pass (every change explained by a rebuilt package or dpkg state) |
+| provenance | pass |
+
+The patch is right and the gate refused it anyway, because of check 1 of ADR-0010. OSV's only `FIX` reference for
+CVE-2022-48303 is `https://savannah.gnu.org/patch/?10307`, a bug-tracker patch page, not the commit. NVD lists the
+same page (tag Patch). For CVE-2024-12133 (libtasn1) neither OSV nor NVD lists any fix reference or commit.
+So with real feed data, check 1 as written would refuse almost every VEX. What check 1 is for, and the options,
+are in the decision on DAB-81.
