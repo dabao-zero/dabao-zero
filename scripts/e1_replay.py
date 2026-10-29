@@ -46,6 +46,7 @@ from dabao.manual import import_bundle
 from dabao.models import Component
 from dabao.orchestrator import Limits, Pipeline, process
 from dabao.orm import AdvisoryRow, AffectedRow, AttemptRow, Base
+from dabao.seams import UpstreamFetcher
 from dabao.toolbox import SandboxToolBox
 
 BASE = DebianBase(
@@ -101,6 +102,11 @@ def main() -> int:
         default=[],
         help="fix reference for the advisory; default: OSV FIX refs and Debian tracker notes",
     )
+    p.add_argument(
+        "--upstream-patch",
+        type=Path,
+        help="read the upstream commit from this file instead of the network (offline runs)",
+    )
     args = p.parse_args()
 
     if args.agent:
@@ -134,6 +140,10 @@ def main() -> int:
         )
         s.commit()
 
+    upstream: UpstreamFetcher = HttpUpstreamFetcher(ALLOWLIST)
+    if args.upstream_patch is not None and bundle is not None:
+        print(f"upstream commit read from {args.upstream_patch}, not the network")
+        upstream = fakes.FakeUpstream({bundle.patch.upstream_ref: args.upstream_patch.read_text()})
     vex_dir = args.work / "vex"
     vex_dir.mkdir(parents=True, exist_ok=True)
     adapter = DebianAdapter(BASE, args.work, builder=args.builder)
@@ -152,7 +162,7 @@ def main() -> int:
         clock=Clock(),
         gates=GateConfig(provenance_allowlist=ALLOWLIST, vex_enabled=args.vex),
         limits=Limits(),
-        upstream=HttpUpstreamFetcher(ALLOWLIST),
+        upstream=upstream,
         vex_dir=vex_dir,
     )
     started = time.time()
