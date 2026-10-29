@@ -68,6 +68,14 @@ SMOKE_BY_PACKAGE = {
         "ldconfig -p | grep -q libtasn1.so.6",
         "apt-get --version | head -1 | grep -q apt",
     ],
+    # su, login and passwd authenticate through PAM; a broken pam_unix fails them
+    "pam": [
+        "dpkg-query -W -f='${Version}' libpam-modules | grep -q 'dabao1'",
+        "dpkg-query -W -f='${Version}' libpam0g | grep -q 'dabao1'",
+        "ldconfig -p | grep -q libpam.so.0",
+        "su root -c 'echo ok' | grep -q ok",
+        "test -x /sbin/unix_chkpwd",
+    ],
     # login (chsh, chfn, su) and the util-linux tools are built from the util-linux source
     "util-linux": [
         "dpkg-query -W -f='${Version}' login | grep -q 'dabao1'",

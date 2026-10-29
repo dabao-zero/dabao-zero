@@ -93,7 +93,8 @@ COPY --from=build /out/ /tmp/dabao-debs/
 RUN set -eu; cd /tmp/dabao-debs; keep=""; \\
     for d in *.deb; do \\
       n=$(dpkg-deb -f "$d" Package); \\
-      if dpkg-query -W "$n" >/dev/null 2>&1; then keep="$keep ./$d"; fi; \\
+      st=$(dpkg-query -W -f='${{Status}}' "$n" 2>/dev/null || true); \\
+      if [ "$st" = "install ok installed" ]; then keep="$keep ./$d"; fi; \\
     done; \\
     [ -n "$keep" ] || {{ echo "no rebuilt package is in the base image" >&2; exit 1; }}; \\
     dpkg --log=/dev/null -i $keep; \\
