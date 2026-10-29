@@ -1,0 +1,23 @@
+CVE-2022-48303 (GNU Tar through 1.34 has a one-byte out-of-bounds read that results in ...)
+	- tar 1.34+dfsg-1.4 (unimportant)
+	[bookworm] - tar 1.34+dfsg-1.2+deb12u1
+	[bullseye] - tar 1.34+dfsg-1+deb11u1
+	NOTE: Crash in CLI tool, no security impact
+	NOTE: https://savannah.gnu.org/bugs/?62387
+	NOTE: https://savannah.gnu.org/patch/?10307
+	NOTE: Fixed by: https://git.savannah.gnu.org/cgit/tar.git/commit/?id=3da78400eafcccb97e2f2fd4b227ea40d794ede8 (v1.35)
+CVE-2024-12133 (A flaw in libtasn1 causes inefficient handling of specific certificate ...)
+	{DSA-5863-1 DLA-4061-1}
+	- libtasn1-6 4.20.0-1 (bug #1095406)
+	NOTE: https://www.openwall.com/lists/oss-security/2025/02/06/6
+	NOTE: https://gitlab.com/gnutls/libtasn1/-/issues/52
+	NOTE: https://gitlab.com/gnutls/libtasn1/-/commit/4082ca2220b5ba910b546afddf7780fc4a51f75a (v4.20.0)
+	NOTE: https://gitlab.com/gnutls/libtasn1/-/commit/869a97aa259dffa2620dabcad84e1c22545ffc3d (v4.20.0)
+	NOTE: https://lists.gnu.org/archive/html/help-libtasn1/2025-02/msg00001.html
+	NOTE: https://gitlab.com/gnutls/libtasn1/-/blob/master/doc/security/CVE-2024-12133.md
+CVE-2023-39804 (In GNU tar before 1.35, mishandled extension attributes in a PAX archi ...)
+	{DLA-3755-1}
+	- tar 1.34+dfsg-1.3 (bug #1058079)
+	[bookworm] - tar 1.34+dfsg-1.2+deb12u1
+	[bullseye] - tar 1.34+dfsg-1+deb11u1
+	NOTE: Fixed by: https://git.savannah.gnu.org/cgit/tar.git/commit/?id=a339f05cd269013fa133d2f148d73f6f7d4247e4 (v1.35)

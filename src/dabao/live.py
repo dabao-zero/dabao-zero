@@ -10,6 +10,7 @@ import json
 import subprocess
 import tarfile
 import tempfile
+import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field, replace
 from pathlib import Path
@@ -17,6 +18,7 @@ from typing import Any
 from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 
+from dabao.ingest import parse_debian_notes
 from dabao.models import Finding
 from dabao.seams import SuiteResult
 from dabao.upstream import patch_url
@@ -331,6 +333,9 @@ class HttpUpstreamFetcher:
 
     allowlist: tuple[str, ...]
     timeout_s: float = 60.0  # savannah answers slowly under load
+    attempts: int = 3  # savannah also answers 502 and drops connections; a gate needs a verdict
+    backoff_s: float = 5.0
+    sleep: Callable[[float], None] = time.sleep
     opener: Callable[[str, float], tuple[str, bytes]] | None = (
         None  # (url, timeout) -> (final url, body)
     )
@@ -348,9 +353,14 @@ class HttpUpstreamFetcher:
         url = patch_url(ref)
         if url is None or urlsplit(url).scheme != "https":
             return None
-        try:
-            final, body = self._open(url)
-        except OSError:
+        for attempt in range(self.attempts):
+            try:
+                final, body = self._open(url)
+                break
+            except OSError:  # includes URLError, HTTPError (502) and timeouts
+                if attempt + 1 < self.attempts:
+                    self.sleep(self.backoff_s * (attempt + 1))
+        else:
             return None
         if _site(urlsplit(final).netloc) != _site(urlsplit(url).netloc):
             return None
@@ -360,3 +370,26 @@ class HttpUpstreamFetcher:
             return body.decode()
         except UnicodeDecodeError:
             return None
+
+
+DEBIAN_CVE_LIST = (
+    "https://salsa.debian.org/security-tracker-team/security-tracker/-/raw/master/data/CVE/list"
+)
+
+
+def fetch_debian_fix_refs(
+    ids: set[str], url: str = DEBIAN_CVE_LIST, timeout_s: float = 300.0
+) -> dict[str, tuple[str, ...]]:
+    """Fix commits the Debian tracker names for `ids`, streamed from its CVE list.
+
+    Stops reading once every id has been seen. Any failure gives no references, which the gate then
+    treats as "the feed names no fix reference" and refuses a VEX (ADR-0010 check 1).
+    """
+    if urlsplit(url).scheme != "https":
+        return {}
+    try:
+        with urlopen(Request(url, headers={"User-Agent": "dabao-zero"}), timeout=timeout_s) as resp:  # noqa: S310
+            lines = (raw.decode(errors="replace") for raw in resp)
+            return parse_debian_notes(lines, wanted=set(ids))
+    except OSError:
+        return {}

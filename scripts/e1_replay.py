@@ -39,12 +39,14 @@ from dabao.live import (
     OciDiffer,
     SmokeSuiteRunner,
     TrivyScanner,
+    fetch_debian_fix_refs,
 )
 from dabao.llm import ChatClient, ConfigError, LLMConfig
 from dabao.manual import import_bundle
 from dabao.models import Component
 from dabao.orchestrator import Limits, Pipeline, process
 from dabao.orm import AdvisoryRow, AffectedRow, AttemptRow, Base
+from dabao.seams import UpstreamFetcher
 from dabao.toolbox import SandboxToolBox
 
 BASE = DebianBase(
@@ -63,14 +65,16 @@ SMOKE = [
 ALLOWLIST = ("https://git.savannah.gnu.org/cgit/tar.git/commit/",)
 
 
-def osv_fix_refs(advisory_id: str) -> list[str]:
-    """The FIX references of the advisory's OSV record, read live (none if it cannot be read)."""
+def feed_fix_refs(advisory_id: str) -> list[str]:
+    """OSV FIX references and the Debian tracker's fix commits for the advisory, read live."""
+    refs: set[str] = set(fetch_debian_fix_refs({advisory_id}).get(advisory_id, ()))
     try:
         with urlopen(f"https://api.osv.dev/v1/vulns/{advisory_id}", timeout=30) as resp:  # noqa: S310
             record = json.load(resp)
+        refs.update(r["url"] for r in record.get("references", []) if r.get("type") == "FIX")
     except (OSError, ValueError):
-        return []
-    return sorted(r["url"] for r in record.get("references", []) if r.get("type") == "FIX")
+        pass
+    return sorted(refs)
 
 
 class Clock:
@@ -96,7 +100,12 @@ def main() -> int:
         "--fix-ref",
         action="append",
         default=[],
-        help="a fix reference to store on the advisory; default: the OSV record's FIX references",
+        help="fix reference for the advisory; default: OSV FIX refs and Debian tracker notes",
+    )
+    p.add_argument(
+        "--upstream-patch",
+        type=Path,
+        help="read the upstream commit from this file instead of the network (offline runs)",
     )
     args = p.parse_args()
 
@@ -116,7 +125,7 @@ def main() -> int:
     factory = make_session_factory(engine)
     with factory() as s:
         if s.get(AdvisoryRow, advisory_id) is None:
-            refs = args.fix_ref or osv_fix_refs(advisory_id)
+            refs = args.fix_ref or feed_fix_refs(advisory_id)
             print(f"fix references on the advisory: {refs}")
             s.add(AdvisoryRow(id=advisory_id, fix_refs="\n".join(refs)))
         s.add(
@@ -131,6 +140,10 @@ def main() -> int:
         )
         s.commit()
 
+    upstream: UpstreamFetcher = HttpUpstreamFetcher(ALLOWLIST)
+    if args.upstream_patch is not None and bundle is not None:
+        print(f"upstream commit read from {args.upstream_patch}, not the network")
+        upstream = fakes.FakeUpstream({bundle.patch.upstream_ref: args.upstream_patch.read_text()})
     vex_dir = args.work / "vex"
     vex_dir.mkdir(parents=True, exist_ok=True)
     adapter = DebianAdapter(BASE, args.work, builder=args.builder)
@@ -149,7 +162,7 @@ def main() -> int:
         clock=Clock(),
         gates=GateConfig(provenance_allowlist=ALLOWLIST, vex_enabled=args.vex),
         limits=Limits(),
-        upstream=HttpUpstreamFetcher(ALLOWLIST),
+        upstream=upstream,
         vex_dir=vex_dir,
     )
     started = time.time()

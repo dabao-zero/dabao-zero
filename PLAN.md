@@ -124,3 +124,13 @@ Success targets (Q27): median advisory-to-published time under 24h for upstream-
 - **Three distro streams multiply build work.** V1 stays on Debian; V5 and V6 reveal the real adapter cost.
 - **Legal.** Trademarks and redistribution of each image's contents; licences audited in V1 (Q21, Q31).
 - **A fully unattended supply chain is a target.** An attacker who controls a trusted upstream fix source can feed it to us. Mitigation (provenance allow-list) is in ADR-0002; reviewed again in V3.
+
+## Long-term direction (2026-10-30)
+
+The owner wants to follow Chainguard's approach over time: scanners go quiet because the distro publishes its
+own advisories, not because every user applies a VEX. Steps toward it, none started beyond the first two:
+build reproducibly and rebuild nightly (reproducible builds exist; nightly does not), publish our own signed
+OpenVEX feed (ADR-0010), add a Wolfi stream (ADR-0004; blocked on the trademark read), and possibly our own
+distro on melange and apko. Chainguard's trust root is human engineers who author the advisories; ours is
+independent upstream data plus deterministic gates (ADR-0002, ADR-0010 check 1), so the claim "no human in the
+patch path" stays the constraint on every step. We do not promise zero CVEs or an SLA (ADR-0001).

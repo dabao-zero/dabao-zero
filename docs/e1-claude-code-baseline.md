@@ -50,3 +50,30 @@ CVE-2022-48303 is `https://savannah.gnu.org/patch/?10307`, a bug-tracker patch p
 same page (tag Patch). For CVE-2024-12133 (libtasn1) neither OSV nor NVD lists any fix reference or commit.
 So with real feed data, check 1 as written would refuse almost every VEX. What check 1 is for, and the options,
 are in the decision on DAB-81.
+
+## Second gate run, after the check-1 amendment (2026-10-30)
+
+ADR-0010 check 1 now also accepts the commits the Debian tracker names in its notes (DAB-81). The advisory carried two
+references, the savannah commit (from the tracker) and OSV's patch page, and check 1 passed.
+
+Savannah was unreachable from this machine during the run (its cgit host resolved to IPv6 only and this machine has
+no IPv6 route; `curl` failed too), so check 2 could not fetch the commit and the gate failed closed, as designed. To
+test the rest of the chain I ran the replay with `--upstream-patch tests/fixtures/tar-3da78400-upstream.patch`: the
+real upstream commit, read from a committed file instead of the network. Everything else was live: real image build,
+Trivy 0.70.0 and Grype 0.121.0, smoke tests. 99 s.
+
+| Gate | Result |
+|------|--------|
+| advisory present before | pass |
+| scanners clear | **pass**: both scanners cleared the CVE "via VEX", after a delta check that the VEX changed only the target |
+| tests pass | pass (smoke commands) |
+| build diff | pass |
+| provenance | pass |
+
+Outcome `published` (to a fake registry; nothing was published). The image digest starts `65973efa…`, the digest of the
+image built from Debian's own patch and of the Codex run, so the Claude Code patch builds to the same bits. The Grype
+statement is `docs/e1-claude-code-vex-grype.json`. First time a VEX cleared a real agent patch end to end.
+
+Not shown by this run: the network fetch of the upstream commit (covered by unit tests with a fake opener and by a
+live read earlier, 2026-10-30, but not in this run); a CVE Debian has not fixed (tar's was already fixed in
+`+deb12u1`; the unfixed case is libtasn1, DAB-65).
