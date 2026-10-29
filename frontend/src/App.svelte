@@ -1,12 +1,19 @@
 <script lang="ts">
+  import { api, STATIC } from "./lib/api";
   import { SITE_NAME } from "./lib/config";
-  import { parseRoute } from "./lib/format";
+  import { formatDateTime, parseRoute } from "./lib/format";
   import TopBar from "./components/TopBar.svelte";
   import About from "./pages/About.svelte";
   import Catalog from "./pages/Catalog.svelte";
   import Fix from "./pages/Fix.svelte";
   import Image from "./pages/Image.svelte";
   import Landing from "./pages/Landing.svelte";
+
+  let asOf = $state<number | null>(null);
+  if (STATIC) {
+    // The site is a snapshot (ADR-0012): say how old it is.
+    api.meta().then((m) => (asOf = m.generated_at)).catch(() => {});
+  }
 
   let hash = $state(window.location.hash);
   const route = $derived(parseRoute(hash));
@@ -47,4 +54,5 @@
 </main>
 <footer class="page ts-label-small muted" style="padding-top: 24px;">
   Free and open source. Provided as is, without warranty or SLA; use at your own risk.
+  {#if asOf !== null}<br />Ledger snapshot from {formatDateTime(asOf)}.{/if}
 </footer>

@@ -2,6 +2,7 @@ import { svelte } from "@sveltejs/vite-plugin-svelte";
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
+  base: process.env.VITE_BASE ?? "/",
   plugins: [svelte()],
   server: { proxy: { "/v1": process.env.DABAO_API ?? "http://127.0.0.1:8000" } },
   resolve: process.env.VITEST ? { conditions: ["browser"] } : undefined,

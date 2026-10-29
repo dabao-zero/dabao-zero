@@ -106,7 +106,15 @@ export interface Run {
   cost_usd: number;
 }
 
-const BASE: string = import.meta.env.VITE_API_URL ?? "";
+/** Static mode (GitHub Pages, ADR-0012): the same responses as files, `/v1/x?q` -> `v1/x.json`. */
+export const STATIC: boolean = import.meta.env.VITE_STATIC === "1";
+const BASE: string = STATIC ? import.meta.env.BASE_URL : (import.meta.env.VITE_API_URL ?? "");
+
+export function endpoint(path: string, isStatic: boolean = STATIC, base: string = BASE): string {
+  if (!isStatic) return `${base}${path}`;
+  const bare = path.split("?")[0].replace(/^\//, "");
+  return `${base.replace(/\/?$/, "/")}${bare}.json`;
+}
 
 export class ApiError extends Error {
   constructor(
@@ -118,7 +126,7 @@ export class ApiError extends Error {
 }
 
 export async function getJson<T>(path: string, fetchFn: typeof fetch = fetch): Promise<T> {
-  const res = await fetchFn(`${BASE}${path}`);
+  const res = await fetchFn(endpoint(path));
   if (!res.ok) throw new ApiError(res.status, `${res.status} ${res.statusText}`.trim());
   return (await res.json()) as T;
 }
@@ -130,5 +138,9 @@ export const api = {
   image: (name: string) => getJson<ImageDetail>(`/v1/images/${enc(name)}`),
   advisory: (id: string) => getJson<AdvisoryDetail>(`/v1/advisories/${enc(id)}`),
   stats: () => getJson<Stats>("/v1/stats"),
-  runs: (limit = 20) => getJson<Run[]>(`/v1/runs?limit=${limit}`),
+  runs: async (limit = 20) => {
+    const all = await getJson<Run[]>(`/v1/runs?limit=${limit}`);
+    return STATIC ? all.slice(0, limit) : all;
+  },
+  meta: () => getJson<{ generated_at: number }>("/v1/meta"),
 };

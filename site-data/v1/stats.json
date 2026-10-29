@@ -1,0 +1,8 @@
+{
+ "attempts": 0,
+ "failed_spend_usd": 0.0,
+ "fixes": 0,
+ "median_cost_per_fix_usd": null,
+ "median_time_to_fix_s": null,
+ "total_spend_usd": 0.0
+}
