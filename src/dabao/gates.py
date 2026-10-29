@@ -13,7 +13,7 @@ from urllib.parse import parse_qsl, urlencode, urlsplit
 
 from dabao.models import Advisory, Patch, PatchSource
 from dabao.seams import BuildDiffer, Scanner, SuiteRunner, UpstreamFetcher
-from dabao.upstream import containment_problem
+from dabao.upstream import containment_problem, patch_url
 from dabao.vex import VexStatement, write_openvex
 
 GATE_NAMES = ("advisory_present_before", "scanners_clear", "tests_pass", "build_diff", "provenance")
@@ -113,16 +113,33 @@ def fix_reference_problem(advisory: Advisory, ref: str) -> str:
     return ""
 
 
+def commit_refs(advisory: Advisory, upstream_ref: str) -> list[str]:
+    """The commit the patch cites, then every other commit the advisory lists as a fix."""
+    refs = [upstream_ref]
+    for ref in advisory.fix_refs:
+        if patch_url(ref) is not None and not any(_same_ref(ref, known) for known in refs):
+            refs.append(ref)
+    return refs
+
+
 def upstream_problem(inp: GateInput) -> str:
-    """ADR-0010 check 2. "" when the upstream commit is contained in the patch; an unreadable
-    commit fails closed."""
-    ref = inp.patch.upstream_ref
+    """ADR-0010 check 2. "" when every upstream fix commit is contained in the patch.
+
+    The cited commit and every other commit the advisory lists are read by the gate and checked on
+    their own, so half of a multi-commit fix (libtasn1 lists two) cannot pass. A commit that cannot
+    be read, for any reason, fails closed.
+    """
     if inp.upstream is None:
         return "no way to read the upstream commit"
-    text = inp.upstream.commit_diff(ref)
-    if text is None:
-        return f"could not read the upstream commit {ref}"
-    return containment_problem(text, inp.patch.diff)
+    cited = inp.patch.upstream_ref
+    for ref in commit_refs(inp.advisory, cited):
+        text = inp.upstream.commit_diff(ref)
+        if text is None:
+            return f"could not read the upstream commit {ref}"
+        problem = containment_problem(text, inp.patch.diff, allow_support_only=ref != cited)
+        if problem:
+            return problem if ref == cited else f"listed fix commit {ref}: {problem}"
+    return ""
 
 
 def _advisory_ids(advisory: Advisory) -> set[str]:

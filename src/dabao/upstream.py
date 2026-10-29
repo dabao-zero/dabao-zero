@@ -92,13 +92,42 @@ def _same_file(a: str, b: str) -> bool:
     return a == b or a.endswith("/" + b) or b.endswith("/" + a)
 
 
-def containment_problem(upstream_diff: str, patch_diff: str) -> str:
-    """ "" when every changed line of the upstream commit's source files is in the patch."""
+# Hosts the Debian tracker's notes name fix commits on, among the CVEs open on bookworm (2026-10-30:
+# 5,593 commit URLs, 93% on github.com). A host list, not a repository list: check 1 already
+# narrows a patch to the exact commit an independent source names; a repo list would not scale.
+UPSTREAM_HOSTS = (
+    "github.com",
+    "gitlab.com",
+    "git.kernel.org",
+    "git.savannah.gnu.org",
+    "cgit.git.savannah.gnu.org",
+    "git.savannah.nongnu.org",
+    "cgit.git.savannah.nongnu.org",
+    "cgit.ghostscript.com",
+    "git.musl-libc.org",
+)
+
+
+def host_allowlist(hosts: tuple[str, ...] = UPSTREAM_HOSTS) -> tuple[str, ...]:
+    """Provenance allow-list entries (URL prefixes) for whole hosts."""
+    return tuple(f"https://{h}/" for h in hosts)
+
+
+def containment_problem(
+    upstream_diff: str, patch_diff: str, *, allow_support_only: bool = False
+) -> str:
+    """ "" when every changed line of the upstream commit's source files is in the patch.
+
+    A commit that changes only tests and docs has nothing to compare: a problem for the commit a
+    patch cites, fine (`allow_support_only`) for another commit the advisory lists.
+    """
     upstream = parse_changes(upstream_diff)
     if not upstream:
         return "the upstream commit has no readable changes"
     source = {f: c for f, c in upstream.items() if not is_support_file(f)}
     if not source:
+        if allow_support_only:
+            return ""
         return "the upstream commit changes only tests and docs, so there is nothing to compare"
     ours = parse_changes(patch_diff)
     for path, want in sorted(source.items()):
