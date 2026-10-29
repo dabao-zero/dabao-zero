@@ -425,7 +425,11 @@ def fetch_debian_fix_refs(
     for attempt in range(attempts):
         try:
             lines = (raw.decode(errors="replace") for raw in open_lines(url, timeout_s))
-            return parse_debian_notes(lines, wanted=set(ids))
+            reached: set[str] = set()
+            found = parse_debian_notes(lines, wanted=set(ids), seen=reached)
+            if reached < set(ids):  # the stream ended before every entry: cut short, or unknown
+                raise OSError(f"the CVE list ended before {sorted(set(ids) - reached)}")
+            return found
         except OSError as exc:  # URLError, HTTPError (429, 5xx) and timeouts
             last = exc
             if attempt + 1 < attempts:

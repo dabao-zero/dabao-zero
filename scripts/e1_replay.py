@@ -68,6 +68,14 @@ SMOKE_BY_PACKAGE = {
         "ldconfig -p | grep -q libtasn1.so.6",
         "apt-get --version | head -1 | grep -q apt",
     ],
+    # login (chsh, chfn, su) and the util-linux tools are built from the util-linux source
+    "util-linux": [
+        "dpkg-query -W -f='${Version}' login | grep -q 'dabao1'",
+        "dpkg-query -W -f='${Version}' util-linux | grep -q 'dabao1'",
+        "su --version | grep -q util-linux",
+        "mount --version | grep -q util-linux",
+        "getopt --version | grep -q util-linux",
+    ],
 }
 
 

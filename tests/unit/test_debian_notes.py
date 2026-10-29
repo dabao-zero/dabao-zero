@@ -119,3 +119,29 @@ def test_the_tracker_fetch_retries_and_a_final_failure_is_logged_not_silent(
     with caplog.at_level("WARNING"):
         assert fetch_debian_fix_refs({"X"}, opener=down, sleep=waited.append) == {}
     assert "could not read the Debian tracker" in caplog.text and waited == [5.0, 10.0]
+
+
+def test_a_stream_cut_short_is_retried_not_taken_for_no_notes(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    from dabao.live import fetch_debian_fix_refs
+
+    full = EXCERPT.read_bytes().splitlines(keepends=True)
+    calls = 0
+
+    def cut_then_whole(url: str, timeout: float) -> Iterator[bytes]:
+        nonlocal calls
+        calls += 1
+        yield from (full[:3] if calls == 1 else full)  # first answer stops inside the first CVE
+
+    got = fetch_debian_fix_refs({"CVE-2024-12133"}, opener=cut_then_whole, sleep=lambda s: None)
+    assert got["CVE-2024-12133"] and calls == 2
+
+    def always_cut(url: str, timeout: float) -> Iterator[bytes]:
+        yield from full[:3]
+
+    with caplog.at_level("WARNING"):
+        assert (
+            fetch_debian_fix_refs({"CVE-2024-12133"}, opener=always_cut, sleep=lambda s: None) == {}
+        )
+    assert "ended before" in caplog.text

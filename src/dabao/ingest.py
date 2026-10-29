@@ -121,26 +121,28 @@ _URL = re.compile(r"https?://\S+")
 
 
 def parse_debian_notes(
-    lines: Iterable[str], wanted: set[str] | None = None
+    lines: Iterable[str], wanted: set[str] | None = None, seen: set[str] | None = None
 ) -> dict[str, tuple[str, ...]]:
     """Fix commits that the Debian security tracker names in its `NOTE:` lines (data/CVE/list).
 
     The tracker's team writes them (`NOTE: Fixed by: <url> (v1.35)`, or a bare commit URL), so they
     are an advisory source the agent does not control (ADR-0010 check 1). Only URLs `patch_url`
     can read as a commit count; bug, mailing-list and advisory links do not. With `wanted`, reading
-    stops once every wanted CVE has been seen, so a caller can stream the 65 MB file.
+    stops once every wanted CVE has been seen, so a caller can stream the 65 MB file. `seen`, if
+    given, is filled with the wanted CVEs whose entry was reached: a stream that ends without them
+    was cut short (or the CVE is unknown), which is not the same as "no fix commit named".
     """
     out: dict[str, set[str]] = {}
     current: str | None = None
-    seen: set[str] = set()
+    reached: set[str] = seen if seen is not None else set()
     for line in lines:
         if line and not line[0].isspace():
-            if wanted is not None and current in wanted:
-                seen.add(current)
-                if seen >= wanted:
-                    break
+            if wanted is not None and current in wanted and reached >= wanted:
+                break
             head = line.split(None, 1)[0]
             current = head if head.startswith("CVE-") else None
+            if current is not None and (wanted is None or current in wanted):
+                reached.add(current)
             continue
         if current is None or (wanted is not None and current not in wanted):
             continue
