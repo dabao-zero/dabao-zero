@@ -1,0 +1,61 @@
+name: pages
+
+# ADR-0012: the public catalog is a static snapshot on GitHub Pages. Off until the repo variable
+# PAGES_DEPLOY is "true" and Pages is set to "GitHub Actions" in the repo settings. Runs only when the
+# site, its data or this workflow change, so a docs-only merge does not redeploy.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "frontend/**"
+      - "site-data/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: vars.PAGES_DEPLOY == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: frontend/.node-version
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run check
+      - run: npm test
+      - name: Build in static mode
+        run: npm run build
+        env:
+          VITE_STATIC: "1"
+          VITE_BASE: /${{ github.event.repository.name }}/
+      - name: Add the ledger snapshot
+        run: cp -r ../site-data/v1 dist/v1
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: frontend/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

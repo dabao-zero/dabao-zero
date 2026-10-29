@@ -42,6 +42,9 @@ check: lint typecheck test-unit ## Everything the pre-push hook runs
 frontend-check: ## Frontend: svelte-check, vitest, build (needs Node 22)
 	cd frontend && npm ci && npm run check && npm test && npm run build
 
+export-site: ## Write the public ledger snapshot to site-data/ (DATABASE_URL=...; ADR-0012)
+	uv run python scripts/export_site.py site-data
+
 demo: ## Seed fake demo data into ./dabao.db and start the API
 	uv run python scripts/seed_demo.py
 	$(MAKE) run

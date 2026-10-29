@@ -15,7 +15,8 @@ live gate parts (`live.py`: Trivy and Grype, OCI differ, smoke runner) and OpenV
 the gate's VEX clearing is behind `GateConfig.vex_enabled`, off; its evidence checks are built: the
 patch ref must be a feed fix reference, `upstream.py` checks the upstream commit is contained in the
 patch, `require_fix_reference` and `require_containment` extend both to every patch, off).
-`scripts/e1_replay.py` wires a live Debian pipeline end to end. **Not built:** the Wolfi adapter,
+`scripts/e1_replay.py` wires a live Debian pipeline end to end. The Pages site (ADR-0012) is built from
+`site-data/` (`make export-site`) by `.github/workflows/pages.yml`, off until `PAGES_DEPLOY` is set. **Not built:** the Wolfi adapter,
 real cosign signing and registry publishing, live feed fetchers, a network namespace around the agent
 sandbox, anything that needs a live LLM (no key is configured).
 

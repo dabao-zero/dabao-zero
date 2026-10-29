@@ -19,7 +19,9 @@ the public does writes to it.
 2. **Serve a static snapshot of the ledger.** A build step exports the `/v1` responses the frontend
    uses (`images`, `images/<name>`, `advisories/<id>`, `stats`, `runs`) to JSON files, and the frontend
    fetches those. Routing is already hash-based, which Pages needs.
-3. **Deploy after green CI on `main`**, behind a repo variable that defaults off (DAB-60).
+3. **Deploy on a push to `main` that touches the site, its data or the workflow**, behind the repo
+   variable `PAGES_DEPLOY` (default off; `.github/workflows/pages.yml`). The deploy job re-runs the frontend
+   checks itself. A docs-only merge does not redeploy.
 4. **Revisit when a live API is needed.** If the site needs live data or any writes, the plan is Fly.io
    for the API and Neon for Postgres, with the frontend pointed at it through `VITE_API_URL`. Not built, not
    costed.
@@ -38,3 +40,19 @@ the public does writes to it.
   the site must show its "as of" time.
 - Public data only: the snapshot must contain nothing the ledger API would not already serve publicly.
 - DNS and a custom domain are left until one is bought.
+
+## Implementation notes (2026-10-30)
+
+- The snapshot is **committed**, in `site-data/v1/*.json`, not exported by the workflow: the ledger lives
+  on the maintainer's machine for now, so CI has nothing to export from. Run `make export-site` against the
+  local ledger and open a PR; the diff is exactly what becomes public.
+- `src/dabao/export.py` writes the responses of the read-only `/v1` endpoints through the real API app, so
+  the snapshot cannot hold a field the API does not serve. File names are checked; an unsafe image name or
+  advisory id stops the export and writes nothing.
+- The frontend runs in static mode with `VITE_STATIC=1`: `/v1/images/nginx` is read from
+  `v1/images/nginx.json` under the site base (`VITE_BASE`, `/dabao-zero/` on Pages), and the footer shows
+  when the snapshot was taken.
+- The first snapshot is an empty ledger, so the catalog says "No images yet". Never export the demo
+  seed (`scripts/seed_demo.py`) to the site: its CVEs are fake.
+- To switch on: set Pages to "GitHub Actions" in the repo settings and the repo variable `PAGES_DEPLOY` to
+  `true`. Neither is done.
