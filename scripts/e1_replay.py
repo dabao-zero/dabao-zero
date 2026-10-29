@@ -48,6 +48,7 @@ from dabao.orchestrator import Limits, Pipeline, process
 from dabao.orm import AdvisoryRow, AffectedRow, AttemptRow, Base
 from dabao.seams import UpstreamFetcher
 from dabao.toolbox import SandboxToolBox
+from dabao.upstream import host_allowlist
 
 BASE = DebianBase(
     image="debian:bookworm-20240110-slim",
@@ -62,7 +63,7 @@ SMOKE = [
 ]
 
 
-ALLOWLIST = ("https://git.savannah.gnu.org/cgit/tar.git/commit/",)
+ALLOWLIST = host_allowlist()
 
 
 def feed_fix_refs(advisory_id: str) -> list[str]:

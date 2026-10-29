@@ -106,8 +106,18 @@ for both CVEs (`NOTE: Fixed by: <url> (v1.35)`, or a bare commit URL).
   issued (the attempt is `UNPATCHED` with that reason).
 - **Not done, on purpose:** a reviewed `fix-links` file maintained by hand, and NVD or commit-message links. Add
   them only if tracker notes turn out not to cover enough CVEs; two have been checked.
-- **Known limit:** a CVE can list several fix commits (libtasn1 lists two). Check 1 accepts a patch that cites any
-  one of them, and check 2 compares against the one cited, so a patch carrying half of a multi-commit fix would
-  pass. Requiring every listed commit is not safe either (a note can list the same fix on two branches). Open.
+- **Several fix commits (decided 2026-10-30):** 28% of the CVEs with named commits list more than one, and
+  libtasn1's two are both needed for its fix. Check 1 still accepts a patch that cites any listed commit, but check
+  2 now reads **every** commit the advisory lists as a fix (`gates.commit_refs`, the same commit under different
+  URLs read once) and requires each to be contained in the patch, checked on its own. A listed commit that cannot
+  be read fails closed; one that changes only tests and docs asks nothing of the patch. Cost: a patch derived from
+  one adapted version of a fix is refused when the tracker also lists another adapted version. That is a visible
+  `UNPATCHED`, not a false "fixed"; loosen it only when replays show how often it happens.
+- **Allow-list (decided 2026-10-30):** a list of hosts, not repositories (`upstream.UPSTREAM_HOSTS`: github.com,
+  gitlab.com, git.kernel.org, the savannah hosts, cgit.ghostscript.com, git.musl-libc.org). Among CVEs open on
+  bookworm the tracker names 5,593 commit URLs on 22 hosts, 93% on github.com. Check 1 already narrows a patch to
+  the exact commit an independent source names, so a repository list would add upkeep, not safety.
+- **Coverage limit:** of 11,711 CVEs open on bookworm, 3,911 (33%) name a fix commit in the tracker. The Debian
+  tier can clear at most that third, and only where an agent also backports the fix. Say so publicly.
 - **Direction:** following Chainguard's approach long term (own advisory feed, possibly Wolfi or our own distro) is
   recorded in `PLAN.md`; it does not change this check.
