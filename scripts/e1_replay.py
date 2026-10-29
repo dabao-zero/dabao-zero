@@ -39,6 +39,7 @@ from dabao.live import (
     OciDiffer,
     SmokeSuiteRunner,
     TrivyScanner,
+    fetch_debian_fix_refs,
 )
 from dabao.llm import ChatClient, ConfigError, LLMConfig
 from dabao.manual import import_bundle
@@ -63,14 +64,16 @@ SMOKE = [
 ALLOWLIST = ("https://git.savannah.gnu.org/cgit/tar.git/commit/",)
 
 
-def osv_fix_refs(advisory_id: str) -> list[str]:
-    """The FIX references of the advisory's OSV record, read live (none if it cannot be read)."""
+def feed_fix_refs(advisory_id: str) -> list[str]:
+    """OSV FIX references and the Debian tracker's fix commits for the advisory, read live."""
+    refs: set[str] = set(fetch_debian_fix_refs({advisory_id}).get(advisory_id, ()))
     try:
         with urlopen(f"https://api.osv.dev/v1/vulns/{advisory_id}", timeout=30) as resp:  # noqa: S310
             record = json.load(resp)
+        refs.update(r["url"] for r in record.get("references", []) if r.get("type") == "FIX")
     except (OSError, ValueError):
-        return []
-    return sorted(r["url"] for r in record.get("references", []) if r.get("type") == "FIX")
+        pass
+    return sorted(refs)
 
 
 class Clock:
@@ -96,7 +99,7 @@ def main() -> int:
         "--fix-ref",
         action="append",
         default=[],
-        help="a fix reference to store on the advisory; default: the OSV record's FIX references",
+        help="fix reference for the advisory; default: OSV FIX refs and Debian tracker notes",
     )
     args = p.parse_args()
 
@@ -116,7 +119,7 @@ def main() -> int:
     factory = make_session_factory(engine)
     with factory() as s:
         if s.get(AdvisoryRow, advisory_id) is None:
-            refs = args.fix_ref or osv_fix_refs(advisory_id)
+            refs = args.fix_ref or feed_fix_refs(advisory_id)
             print(f"fix references on the advisory: {refs}")
             s.add(AdvisoryRow(id=advisory_id, fix_refs="\n".join(refs)))
         s.add(
