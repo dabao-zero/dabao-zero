@@ -351,3 +351,57 @@ def test_added_layers_says_how_many_layers_the_build_put_on_top(tmp_path: Path) 
     src = ImageSource(BASE, "nginx", {digest: tmp_path})
     # counting only the last layer as the build's still sees the change that is in it
     assert OciDiffer(src, added_layers=1).changed_files(BASE, digest) == ["usr/bin/evil"]
+
+
+def test_a_multi_arch_library_is_explained_by_its_arch_qualified_file_list(tmp_path: Path) -> None:
+    """dpkg names the list of a Multi-Arch: same package `libtasn1-6:amd64.list`, not `libtasn1-6.list`."""
+    status = (
+        b"Package: libtasn1-6\nStatus: install ok installed\nMulti-Arch: same\n"
+        b"Architecture: amd64\nVersion: 4.19.0-2+dabao1\n"
+    )
+    listing = (
+        b"/.\n/usr/lib/x86_64-linux-gnu/libtasn1.so.6.6.3\n"
+        b"/usr/lib/x86_64-linux-gnu/libtasn1.so.6\n"
+    )
+    digest = write_oci(
+        tmp_path,
+        [
+            layer({"bin/sh": b"base"}),
+            layer(
+                {
+                    "usr/lib/x86_64-linux-gnu/libtasn1.so.6.6.3": b"new",
+                    "usr/lib/x86_64-linux-gnu/libtasn1.so.6": b"link",
+                    "var/lib/dpkg/status": status,
+                    "var/lib/dpkg/info/libtasn1-6:amd64.list": listing,
+                }
+            ),
+        ],
+    )
+    src = ImageSource(BASE, "debian:slim", {digest: tmp_path})
+    differ = OciDiffer(src, base_layers=1)
+    assert differ.changed_files(BASE, digest) == []
+    assert differ.rebuilt_packages(digest) == [("libtasn1-6", "4.19.0-2+dabao1")]
+
+
+def test_an_arch_qualified_list_of_another_package_explains_nothing(tmp_path: Path) -> None:
+    status = (
+        b"Package: libtasn1-6\nStatus: install ok installed\nMulti-Arch: same\n"
+        b"Architecture: amd64\nVersion: 4.19.0-2+dabao1\n"
+    )
+    digest = write_oci(
+        tmp_path,
+        [
+            layer({"bin/sh": b"base"}),
+            layer(
+                {
+                    "usr/lib/x86_64-linux-gnu/libtasn1.so.6.6.3": b"new",
+                    "usr/bin/evil": b"!",
+                    "var/lib/dpkg/status": status,
+                    "var/lib/dpkg/info/libtasn1-6:amd64.list": b"/usr/lib/x86_64-linux-gnu/libtasn1.so.6.6.3\n",
+                    "var/lib/dpkg/info/libtasn1-6-dev:amd64.list": b"/usr/bin/evil\n",
+                }
+            ),
+        ],
+    )
+    src = ImageSource(BASE, "debian:slim", {digest: tmp_path})
+    assert OciDiffer(src, base_layers=1).changed_files(BASE, digest) == ["usr/bin/evil"]

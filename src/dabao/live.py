@@ -189,6 +189,22 @@ class _Scan:
     base_texts: dict[str, str]  # the same files as the base image had them
 
 
+def _dpkg_listing(texts: Mapping[str, str], package: str) -> str:
+    """The file list of a package: `<pkg>.list`, or `<pkg>:<arch>.list` for a Multi-Arch one.
+
+    The prefix includes the colon, so `libtasn1-6` never picks up `libtasn1-6-dev:amd64.list`.
+    """
+    base = f"var/lib/dpkg/info/{package}"
+    exact = texts.get(f"{base}.list")
+    if exact is not None:
+        return exact
+    return "\n".join(
+        text
+        for name, text in sorted(texts.items())
+        if name.startswith(f"{base}:") and name.endswith(".list")
+    )
+
+
 @dataclass
 class OciDiffer:
     """Files the build changed that no rebuilt package or package-manager bookkeeping explains.
@@ -253,7 +269,7 @@ class OciDiffer:
         out: dict[str, tuple[str, list[str]]] = {}
         for pkg, version in _installed_versions(scan.texts.get(DPKG_STATUS_FILE, "")).items():
             if version.endswith(self.rebuilt_marker):
-                listing = scan.texts.get(f"var/lib/dpkg/info/{pkg}.list", "")
+                listing = _dpkg_listing(scan.texts, pkg)
                 out[pkg] = (version, [_merged_usr(ln) for ln in listing.splitlines()])
         return out
 
