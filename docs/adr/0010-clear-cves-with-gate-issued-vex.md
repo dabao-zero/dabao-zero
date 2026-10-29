@@ -30,8 +30,9 @@ subcomponents did not work in either.
 2. **The gate runner issues an OpenVEX statement per (CVE, rebuilt package), status `fixed`.** Never the agent, and
    never a human in the patch path. The statement carries the upstream ref and the patch digest.
 3. **It is issued only if all four checks pass:**
-   1. the patch's `upstream_ref` is one of the advisory's own fix references from the feed (OSV or the distro
-      tracker), not just any URL on the provenance allow-list;
+   1. the patch's `upstream_ref` is one of the advisory's own fix references from the feeds (OSV `FIX`
+      references and the fix commits named in the Debian security tracker's notes, amended 2026-10-30), not just
+      any URL on the provenance allow-list;
    2. the changes of the upstream commit, fetched by the gate itself from the allow-list, are contained in the
       patch diff (context may shift, changed lines may not);
    3. the patch applies, the image builds and the tests pass;
@@ -88,3 +89,25 @@ subcomponents did not work in either.
   not `NEEDS_HUMAN` as the card said; every gate failure is handled that way in the orchestrator.
 - Both checks always apply to a VEX. `GateConfig.require_fix_reference` and `require_containment` (default
   off) apply them to every patch through the provenance gate.
+
+## Amendment (2026-10-30): where fix references come from (DAB-81)
+
+A live gate run on a correct patch (`docs/e1-claude-code-baseline.md`) showed check 1 refusing it: OSV's only
+`FIX` reference for CVE-2022-48303 is a bug-tracker patch page, not the commit, and for CVE-2024-12133 neither OSV
+nor NVD lists any. Check 1 is the only thing that ties the upstream commit to the CVE, so it stays; what changed is
+where the link may come from. The Debian security tracker's `data/CVE/list` names the fix commit in `NOTE:` lines
+for both CVEs (`NOTE: Fixed by: <url> (v1.35)`, or a bare commit URL).
+
+- **Source added:** commit URLs in those notes (`ingest.parse_debian_notes`, streamed by
+  `live.fetch_debian_fix_refs`, merged by `ingest.with_fix_refs`). Only URLs the gate can read as a commit count;
+  bug, mailing-list and advisory links do not. The notes are written by the Debian security team, not by an agent,
+  the same trust root as the advisory feed itself.
+- **Failure mode:** if the file cannot be read or names no commit, the advisory has no fix reference and no VEX is
+  issued (the attempt is `UNPATCHED` with that reason).
+- **Not done, on purpose:** a reviewed `fix-links` file maintained by hand, and NVD or commit-message links. Add
+  them only if tracker notes turn out not to cover enough CVEs; two have been checked.
+- **Known limit:** a CVE can list several fix commits (libtasn1 lists two). Check 1 accepts a patch that cites any
+  one of them, and check 2 compares against the one cited, so a patch carrying half of a multi-commit fix would
+  pass. Requiring every listed commit is not safe either (a note can list the same fix on two branches). Open.
+- **Direction:** following Chainguard's approach long term (own advisory feed, possibly Wolfi or our own distro) is
+  recorded in `PLAN.md`; it does not change this check.
