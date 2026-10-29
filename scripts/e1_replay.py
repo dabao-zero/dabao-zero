@@ -56,11 +56,26 @@ BASE = DebianBase(
     snapshot="20240110T000000Z",
     source_date_epoch=1704844800,
 )
-SMOKE = [
-    "dpkg-query -W -f='${Version}' tar | grep -q 'dabao1'",
-    "cd /tmp && echo hello > a && tar -cf t.tar a && rm a && tar -xf t.tar && grep -q hello a",
-    "cd /tmp && tar --format=pax -cf p.tar /etc/hostname && tar -tf p.tar | grep -q hostname",
-]
+SMOKE_BY_PACKAGE = {
+    "tar": [
+        "dpkg-query -W -f='${Version}' tar | grep -q 'dabao1'",
+        "cd /tmp && echo hello > a && tar -cf t.tar a && rm a && tar -xf t.tar && grep -q hello a",
+        "cd /tmp && tar --format=pax -cf p.tar /etc/hostname && tar -tf p.tar | grep -q hostname",
+    ],
+    # apt links libgnutls, which loads libtasn1: if the rebuilt library is broken, apt-get fails
+    "libtasn1-6": [
+        "dpkg-query -W -f='${Version}' libtasn1-6 | grep -q 'dabao1'",
+        "ldconfig -p | grep -q libtasn1.so.6",
+        "apt-get --version | head -1 | grep -q apt",
+    ],
+}
+
+
+def smoke_for(package: str) -> list[str]:
+    """Smoke commands for the package; any other package gets only the version check."""
+    return SMOKE_BY_PACKAGE.get(
+        package, [f"dpkg-query -W -f='${{Version}}' {package} | grep -q 'dabao1'"]
+    )
 
 
 ALLOWLIST = host_allowlist()
@@ -155,7 +170,7 @@ def main() -> int:
         agent=fakes.FakeAgentRunner(),  # replaced by the bundle in import_bundle
         adapter=adapter,
         scanners=scanners,
-        suite_runner=SmokeSuiteRunner(source, SMOKE, builder=args.builder),
+        suite_runner=SmokeSuiteRunner(source, smoke_for(comp.package), builder=args.builder),
         differ=differ,
         rebuilt=lambda digest: differ.rebuilt_packages(digest) or [],
         registry=fakes.FakeRegistry(),

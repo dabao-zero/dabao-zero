@@ -5,6 +5,8 @@ from __future__ import annotations
 from collections.abc import Iterator
 from pathlib import Path
 
+import pytest
+
 from dabao.gates import fix_reference_problem
 from dabao.ingest import FeedRecord, parse_debian_notes, with_fix_refs
 from dabao.models import Advisory
@@ -90,3 +92,30 @@ def test_the_tar_commit_now_passes_check_1_which_it_failed_on_osv_alone() -> Non
         id="CVE-2022-48303", fix_refs=(*osv_only.fix_refs, *notes()["CVE-2022-48303"])
     )
     assert fix_reference_problem(with_tracker, TAR) == ""
+
+
+def test_the_tracker_fetch_retries_and_a_final_failure_is_logged_not_silent(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    from dabao.live import fetch_debian_fix_refs
+
+    calls = 0
+    waited: list[float] = []
+
+    def flaky(url: str, timeout: float) -> Iterator[bytes]:
+        nonlocal calls
+        calls += 1
+        if calls < 3:
+            raise OSError("429")
+        yield from EXCERPT.read_bytes().splitlines(keepends=True)
+
+    got = fetch_debian_fix_refs({"CVE-2022-48303"}, opener=flaky, sleep=waited.append)
+    assert got == {"CVE-2022-48303": (TAR,)} and waited == [5.0, 10.0]
+
+    def down(url: str, timeout: float) -> Iterator[bytes]:
+        raise OSError("down")
+
+    waited.clear()
+    with caplog.at_level("WARNING"):
+        assert fetch_debian_fix_refs({"X"}, opener=down, sleep=waited.append) == {}
+    assert "could not read the Debian tracker" in caplog.text and waited == [5.0, 10.0]

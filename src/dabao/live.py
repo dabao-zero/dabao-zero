@@ -7,11 +7,12 @@ network. A tool that fails raises or returns None; none of them ever reports "cl
 from __future__ import annotations
 
 import json
+import logging
 import subprocess
 import tarfile
 import tempfile
 import time
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
@@ -24,6 +25,9 @@ from dabao.seams import SuiteResult
 from dabao.upstream import patch_url
 
 Runner = Callable[[list[str]], subprocess.CompletedProcess[bytes]]
+
+
+log = logging.getLogger(__name__)
 
 
 class ScannerError(Exception):
@@ -378,18 +382,37 @@ DEBIAN_CVE_LIST = (
 
 
 def fetch_debian_fix_refs(
-    ids: set[str], url: str = DEBIAN_CVE_LIST, timeout_s: float = 300.0
+    ids: set[str],
+    url: str = DEBIAN_CVE_LIST,
+    timeout_s: float = 300.0,
+    attempts: int = 3,
+    backoff_s: float = 5.0,
+    sleep: Callable[[float], None] = time.sleep,
+    opener: Callable[[str, float], Iterable[bytes]] | None = None,
 ) -> dict[str, tuple[str, ...]]:
     """Fix commits the Debian tracker names for `ids`, streamed from its CVE list.
 
-    Stops reading once every id has been seen. Any failure gives no references, which the gate then
-    treats as "the feed names no fix reference" and refuses a VEX (ADR-0010 check 1).
+    Stops reading once every id has been seen. After `attempts` failures it logs a warning and gives
+    no references, which the gate treats as "the feed names no fix reference" and refuses a VEX
+    (ADR-0010 check 1): a network failure must not pass as a clean answer, so it is logged.
     """
     if urlsplit(url).scheme != "https":
         return {}
-    try:
-        with urlopen(Request(url, headers={"User-Agent": "dabao-zero"}), timeout=timeout_s) as resp:  # noqa: S310
-            lines = (raw.decode(errors="replace") for raw in resp)
+
+    def default_open(u: str, timeout: float) -> Iterable[bytes]:
+        req = Request(u, headers={"User-Agent": "dabao-zero"})  # noqa: S310
+        with urlopen(req, timeout=timeout) as resp:  # noqa: S310
+            yield from resp
+
+    open_lines = opener or default_open
+    last: OSError | None = None
+    for attempt in range(attempts):
+        try:
+            lines = (raw.decode(errors="replace") for raw in open_lines(url, timeout_s))
             return parse_debian_notes(lines, wanted=set(ids))
-    except OSError:
-        return {}
+        except OSError as exc:  # URLError, HTTPError (429, 5xx) and timeouts
+            last = exc
+            if attempt + 1 < attempts:
+                sleep(backoff_s * (attempt + 1))
+    log.warning("could not read the Debian tracker's CVE list (%s): no fix references", last)
+    return {}
