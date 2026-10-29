@@ -22,6 +22,7 @@ import json
 import time
 from dataclasses import replace
 from pathlib import Path
+from urllib.request import urlopen
 
 from sqlalchemy import select
 
@@ -31,7 +32,14 @@ from dabao.bundle import load_bundle
 from dabao.db import make_engine, make_session_factory
 from dabao.debian import DebianAdapter, DebianBase
 from dabao.gates import GateConfig
-from dabao.live import GrypeScanner, ImageSource, OciDiffer, SmokeSuiteRunner, TrivyScanner
+from dabao.live import (
+    GrypeScanner,
+    HttpUpstreamFetcher,
+    ImageSource,
+    OciDiffer,
+    SmokeSuiteRunner,
+    TrivyScanner,
+)
 from dabao.llm import ChatClient, ConfigError, LLMConfig
 from dabao.manual import import_bundle
 from dabao.models import Component
@@ -52,6 +60,19 @@ SMOKE = [
 ]
 
 
+ALLOWLIST = ("https://git.savannah.gnu.org/cgit/tar.git/commit/",)
+
+
+def osv_fix_refs(advisory_id: str) -> list[str]:
+    """The FIX references of the advisory's OSV record, read live (none if it cannot be read)."""
+    try:
+        with urlopen(f"https://api.osv.dev/v1/vulns/{advisory_id}", timeout=30) as resp:  # noqa: S310
+            record = json.load(resp)
+    except (OSError, ValueError):
+        return []
+    return sorted(r["url"] for r in record.get("references", []) if r.get("type") == "FIX")
+
+
 class Clock:
     def now(self) -> float:
         return time.time()
@@ -68,6 +89,15 @@ def main() -> int:
     p.add_argument("--work", type=Path, required=True)
     p.add_argument("--db", type=Path, required=True)
     p.add_argument("--builder", default="dabao-builder")
+    p.add_argument(
+        "--vex", action="store_true", help="let the gate clear the CVE with a VEX (ADR-0010)"
+    )
+    p.add_argument(
+        "--fix-ref",
+        action="append",
+        default=[],
+        help="a fix reference to store on the advisory; default: the OSV record's FIX references",
+    )
     args = p.parse_args()
 
     if args.agent:
@@ -86,7 +116,9 @@ def main() -> int:
     factory = make_session_factory(engine)
     with factory() as s:
         if s.get(AdvisoryRow, advisory_id) is None:
-            s.add(AdvisoryRow(id=advisory_id))
+            refs = args.fix_ref or osv_fix_refs(advisory_id)
+            print(f"fix references on the advisory: {refs}")
+            s.add(AdvisoryRow(id=advisory_id, fix_refs="\n".join(refs)))
         s.add(
             AffectedRow(
                 advisory_id=advisory_id,
@@ -99,6 +131,8 @@ def main() -> int:
         )
         s.commit()
 
+    vex_dir = args.work / "vex"
+    vex_dir.mkdir(parents=True, exist_ok=True)
     adapter = DebianAdapter(BASE, args.work, builder=args.builder)
     source = ImageSource(BASE.digest, BASE.image, adapter.archives)
     scanners = (TrivyScanner(source), GrypeScanner(source))
@@ -113,10 +147,10 @@ def main() -> int:
         registry=fakes.FakeRegistry(),
         signer=fakes.FakeSigner(),
         clock=Clock(),
-        gates=GateConfig(
-            provenance_allowlist=("https://git.savannah.gnu.org/cgit/tar.git/commit/",)
-        ),
+        gates=GateConfig(provenance_allowlist=ALLOWLIST, vex_enabled=args.vex),
         limits=Limits(),
+        upstream=HttpUpstreamFetcher(ALLOWLIST),
+        vex_dir=vex_dir,
     )
     started = time.time()
     if bundle is not None:
