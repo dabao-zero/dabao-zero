@@ -9,8 +9,8 @@ from __future__ import annotations
 import json
 import subprocess
 import tarfile
-import time
 import tempfile
+import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field, replace
 from pathlib import Path
