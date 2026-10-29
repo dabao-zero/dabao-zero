@@ -7,11 +7,12 @@ network. A tool that fails raises or returns None; none of them ever reports "cl
 from __future__ import annotations
 
 import json
+import logging
 import subprocess
 import tarfile
 import tempfile
 import time
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterable, Iterator, Mapping
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
@@ -24,6 +25,9 @@ from dabao.seams import SuiteResult
 from dabao.upstream import patch_url
 
 Runner = Callable[[list[str]], subprocess.CompletedProcess[bytes]]
+
+
+log = logging.getLogger(__name__)
 
 
 class ScannerError(Exception):
@@ -185,6 +189,22 @@ class _Scan:
     base_texts: dict[str, str]  # the same files as the base image had them
 
 
+def _dpkg_listing(texts: Mapping[str, str], package: str) -> str:
+    """The file list of a package: `<pkg>.list`, or `<pkg>:<arch>.list` for a Multi-Arch one.
+
+    The prefix includes the colon, so `libtasn1-6` never picks up `libtasn1-6-dev:amd64.list`.
+    """
+    base = f"var/lib/dpkg/info/{package}"
+    exact = texts.get(f"{base}.list")
+    if exact is not None:
+        return exact
+    return "\n".join(
+        text
+        for name, text in sorted(texts.items())
+        if name.startswith(f"{base}:") and name.endswith(".list")
+    )
+
+
 @dataclass
 class OciDiffer:
     """Files the build changed that no rebuilt package or package-manager bookkeeping explains.
@@ -249,7 +269,7 @@ class OciDiffer:
         out: dict[str, tuple[str, list[str]]] = {}
         for pkg, version in _installed_versions(scan.texts.get(DPKG_STATUS_FILE, "")).items():
             if version.endswith(self.rebuilt_marker):
-                listing = scan.texts.get(f"var/lib/dpkg/info/{pkg}.list", "")
+                listing = _dpkg_listing(scan.texts, pkg)
                 out[pkg] = (version, [_merged_usr(ln) for ln in listing.splitlines()])
         return out
 
@@ -372,24 +392,80 @@ class HttpUpstreamFetcher:
             return None
 
 
+def resuming_lines(
+    open_at: Callable[[int], Iterable[bytes]],
+    max_resumes: int = 20,
+    backoff_s: float = 2.0,
+    sleep: Callable[[float], None] = time.sleep,
+) -> Iterator[bytes]:
+    """Lines of a long download that survive the connection being cut.
+
+    `open_at(offset)` starts reading at a byte offset. After an error the read resumes from the end
+    of the last line handed out, so no line is repeated or split. The Debian CVE list is 65 MB and
+    the host drops long transfers; starting over each time never reaches the older entries.
+    """
+    offset = resumes = 0
+    while True:
+        try:
+            for line in open_at(offset):
+                offset += len(line)
+                yield line
+            return
+        except OSError:
+            resumes += 1
+            if resumes > max_resumes:
+                raise
+            sleep(backoff_s)
+
+
 DEBIAN_CVE_LIST = (
     "https://salsa.debian.org/security-tracker-team/security-tracker/-/raw/master/data/CVE/list"
 )
 
 
 def fetch_debian_fix_refs(
-    ids: set[str], url: str = DEBIAN_CVE_LIST, timeout_s: float = 300.0
+    ids: set[str],
+    url: str = DEBIAN_CVE_LIST,
+    timeout_s: float = 300.0,
+    attempts: int = 3,
+    backoff_s: float = 5.0,
+    sleep: Callable[[float], None] = time.sleep,
+    opener: Callable[[str, float], Iterable[bytes]] | None = None,
 ) -> dict[str, tuple[str, ...]]:
     """Fix commits the Debian tracker names for `ids`, streamed from its CVE list.
 
-    Stops reading once every id has been seen. Any failure gives no references, which the gate then
-    treats as "the feed names no fix reference" and refuses a VEX (ADR-0010 check 1).
+    Stops reading once every id has been seen. After `attempts` failures it logs a warning and gives
+    no references, which the gate treats as "the feed names no fix reference" and refuses a VEX
+    (ADR-0010 check 1): a network failure must not pass as a clean answer, so it is logged.
     """
     if urlsplit(url).scheme != "https":
         return {}
-    try:
-        with urlopen(Request(url, headers={"User-Agent": "dabao-zero"}), timeout=timeout_s) as resp:  # noqa: S310
-            lines = (raw.decode(errors="replace") for raw in resp)
-            return parse_debian_notes(lines, wanted=set(ids))
-    except OSError:
-        return {}
+
+    def default_open(u: str, timeout: float) -> Iterable[bytes]:
+        def open_at(offset: int) -> Iterable[bytes]:
+            headers = {"User-Agent": "dabao-zero"}
+            if offset:
+                headers["Range"] = f"bytes={offset}-"
+            with urlopen(Request(u, headers=headers), timeout=timeout) as resp:  # noqa: S310
+                if offset and resp.status != 206:
+                    raise OSError("the server ignored the Range request")
+                yield from resp
+
+        return resuming_lines(open_at, sleep=sleep)
+
+    open_lines = opener or default_open
+    last: OSError | None = None
+    for attempt in range(attempts):
+        try:
+            lines = (raw.decode(errors="replace") for raw in open_lines(url, timeout_s))
+            reached: set[str] = set()
+            found = parse_debian_notes(lines, wanted=set(ids), seen=reached)
+            if reached < set(ids):  # the stream ended before every entry: cut short, or unknown
+                raise OSError(f"the CVE list ended before {sorted(set(ids) - reached)}")
+            return found
+        except OSError as exc:  # URLError, HTTPError (429, 5xx) and timeouts
+            last = exc
+            if attempt + 1 < attempts:
+                sleep(backoff_s * (attempt + 1))
+    log.warning("could not read the Debian tracker's CVE list (%s): no fix references", last)
+    return {}

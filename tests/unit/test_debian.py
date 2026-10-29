@@ -163,3 +163,20 @@ def test_real_debian_versions_are_accepted(tmp_path: Path) -> None:
         comp = COMP.model_copy(update={"version": v})
         patch = PATCH.model_copy(update={"component": comp})
         adapter(tmp_path, FakeDocker()).build_image(comp, patch)
+
+
+def test_only_packages_the_base_really_has_installed_are_replaced() -> None:
+    """`dpkg-query -W` succeeds for a known but not-installed package (libpam0g-dev in the pinned
+    slim base has status `unknown ok not-installed`), so the test must read the status."""
+    df = render_dockerfile(COMP, BASE)
+    assert "install ok installed" in df
+    assert 'if dpkg-query -W "$n" >/dev/null' not in df
+
+
+def test_a_package_that_pre_depends_on_another_rebuilt_one_still_installs() -> None:
+    """libpam-modules Pre-Depends on libpam-modules-bin (= same version). One `dpkg -i` over both
+    fails when the first is unpacked before the second is configured; a second pass succeeds, and a
+    real error still fails both."""
+    df = render_dockerfile(COMP, BASE)
+    first = "dpkg --log=/dev/null -i $keep || dpkg --log=/dev/null -i $keep;"
+    assert first in df

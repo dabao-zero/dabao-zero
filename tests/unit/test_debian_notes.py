@@ -5,6 +5,8 @@ from __future__ import annotations
 from collections.abc import Iterator
 from pathlib import Path
 
+import pytest
+
 from dabao.gates import fix_reference_problem
 from dabao.ingest import FeedRecord, parse_debian_notes, with_fix_refs
 from dabao.models import Advisory
@@ -90,3 +92,87 @@ def test_the_tar_commit_now_passes_check_1_which_it_failed_on_osv_alone() -> Non
         id="CVE-2022-48303", fix_refs=(*osv_only.fix_refs, *notes()["CVE-2022-48303"])
     )
     assert fix_reference_problem(with_tracker, TAR) == ""
+
+
+def test_the_tracker_fetch_retries_and_a_final_failure_is_logged_not_silent(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    from dabao.live import fetch_debian_fix_refs
+
+    calls = 0
+    waited: list[float] = []
+
+    def flaky(url: str, timeout: float) -> Iterator[bytes]:
+        nonlocal calls
+        calls += 1
+        if calls < 3:
+            raise OSError("429")
+        yield from EXCERPT.read_bytes().splitlines(keepends=True)
+
+    got = fetch_debian_fix_refs({"CVE-2022-48303"}, opener=flaky, sleep=waited.append)
+    assert got == {"CVE-2022-48303": (TAR,)} and waited == [5.0, 10.0]
+
+    def down(url: str, timeout: float) -> Iterator[bytes]:
+        raise OSError("down")
+
+    waited.clear()
+    with caplog.at_level("WARNING"):
+        assert fetch_debian_fix_refs({"X"}, opener=down, sleep=waited.append) == {}
+    assert "could not read the Debian tracker" in caplog.text and waited == [5.0, 10.0]
+
+
+def test_a_stream_cut_short_is_retried_not_taken_for_no_notes(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    from dabao.live import fetch_debian_fix_refs
+
+    full = EXCERPT.read_bytes().splitlines(keepends=True)
+    calls = 0
+
+    def cut_then_whole(url: str, timeout: float) -> Iterator[bytes]:
+        nonlocal calls
+        calls += 1
+        yield from (full[:3] if calls == 1 else full)  # first answer stops inside the first CVE
+
+    got = fetch_debian_fix_refs({"CVE-2024-12133"}, opener=cut_then_whole, sleep=lambda s: None)
+    assert got["CVE-2024-12133"] and calls == 2
+
+    def always_cut(url: str, timeout: float) -> Iterator[bytes]:
+        yield from full[:3]
+
+    with caplog.at_level("WARNING"):
+        assert (
+            fetch_debian_fix_refs({"CVE-2024-12133"}, opener=always_cut, sleep=lambda s: None) == {}
+        )
+    assert "ended before" in caplog.text
+
+
+def test_a_download_cut_part_way_resumes_from_the_last_whole_line() -> None:
+    from dabao.live import resuming_lines
+
+    data = [b"line one\n", b"line two\n", b"line three\n", b"line four\n"]
+    starts: list[int] = []
+    cuts = [2, 1]  # the first read dies after 2 lines, the second after 1 more
+
+    def open_at(offset: int) -> Iterator[bytes]:
+        starts.append(offset)
+        body = b"".join(data)[offset:].splitlines(keepends=True)
+        n = cuts.pop(0) if cuts else len(body)
+        yield from body[:n]
+        if n < len(body):
+            raise OSError("connection reset")
+
+    got = list(resuming_lines(open_at, sleep=lambda s: None))
+    assert got == data  # nothing repeated, nothing lost
+    assert starts == [0, len(data[0]) + len(data[1]), len(data[0]) + len(data[1]) + len(data[2])]
+
+
+def test_a_download_that_keeps_failing_gives_up() -> None:
+    from dabao.live import resuming_lines
+
+    def always(offset: int) -> Iterator[bytes]:
+        raise OSError("down")
+        yield b""
+
+    with pytest.raises(OSError):
+        list(resuming_lines(always, max_resumes=3, sleep=lambda s: None))
