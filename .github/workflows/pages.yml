@@ -43,7 +43,7 @@ jobs:
           VITE_BASE: /${{ github.event.repository.name }}/
       - name: Add the ledger snapshot
         run: cp -r ../site-data/v1 dist/v1
-      - uses: actions/upload-pages-artifact@v4
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: frontend/dist
 
