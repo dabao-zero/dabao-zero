@@ -121,3 +121,27 @@ for both CVEs (`NOTE: Fixed by: <url> (v1.35)`, or a bare commit URL).
   tier can clear at most that third, and only where an agent also backports the fix. Say so publicly.
 - **Direction:** following Chainguard's approach long term (own advisory feed, possibly Wolfi or our own distro) is
   recorded in `PLAN.md`; it does not change this check.
+
+## Amendment (2026-10-30): the patch must change what ships (DAB-83)
+
+Checks 1 and 2 say the patch carries the upstream fix; neither says the fixed code is in the image. Debian's own
+notes flag CVEs whose code is not built into any binary (util-linux CVE-2025-14104, CVE-2022-0563; the zlib
+minizip CVE). A patch to code that is not built passes checks 1 and 2, builds, passes tests, and a VEX would then
+say "fixed" for something that was never present. A fifth condition closes that:
+
+- **Control build:** the adapter rebuilds the same source, changelog and steps without the patch
+  (`DebianAdapter.build_control`; the Dockerfile differs by one line). `OciDiffer.shipped_changes` compares the
+  files each build wrote, by content (sha256, or the link target), leaving out package-manager state, which only
+  restates those hashes. No file differs means the patch changes nothing the package ships, and the `build_diff`
+  gate fails.
+- **Why a control and not the official package:** the official `.deb` was built elsewhere, so it differs from any
+  rebuild for reasons that have nothing to do with the patch. The control and the patched build come from one
+  builder, so they differ only by the patch (two builds of the same inputs have the same digest).
+- **Flag:** `GateConfig.require_shipped_change`, off. With it on and no control build, no comparer or a comparison
+  that cannot run, the gate fails. The orchestrator builds the control only when the flag is on.
+- **Limits:** Debian only; the Alpine adapter has no `build_control`, so the flag fails closed there. A patch that
+  changes a shipped file in a way that does not touch the vulnerable path (a harmless extra hunk) still passes;
+  check 2's containment and review of the diff are what catch that. Wolfi would need the same.
+- **Live check (2026-10-30):** libtasn1 CVE-2025-13151 through `scripts/e1_replay.py --vex --shipped`: all five
+  gates pass, and the control and patched builds differ in exactly `usr/lib/x86_64-linux-gnu/libtasn1.so.6.6.3`.
+  The negative case (a patch to unbuilt code) is covered by unit tests only; no real unbuilt-code target was run.
