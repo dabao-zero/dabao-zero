@@ -395,3 +395,52 @@ def test_with_the_flag_off_the_same_scan_is_unpatched_and_nothing_is_written(
 ) -> None:
     assert process(pending, vex_pipeline(tmp_path, enabled=False), 1) is Outcome.UNPATCHED
     assert list(tmp_path.iterdir()) == []
+
+
+class ShippedFake:
+    def __init__(self, changes: list[str] | None) -> None:
+        self.changes, self.asked = changes, []  # type: ignore[var-annotated]
+
+    def shipped_changes(self, control_digest: str, after_digest: str) -> list[str] | None:
+        self.asked.append((control_digest, after_digest))
+        return self.changes
+
+
+def test_a_patch_that_ships_nothing_new_is_refused_when_the_check_is_on(
+    pending: sessionmaker[Session],
+) -> None:
+    """DAB-83: the control is a rebuild without the patch; the pipeline builds it and the gate
+    compares it with the patched build."""
+    shipped = ShippedFake([])
+    p = replace(pipeline(), gates=replace(CFG, require_shipped_change=True), shipped=shipped)
+    assert process(pending, p, 1) is Outcome.UNPATCHED
+    assert p.registry.pushed == {}  # type: ignore[attr-defined]
+    control = ADAPTER.build_control(COMP, PATCH)
+    assert shipped.asked == [(control, AFTER)]
+    with pending() as s:
+        att = s.scalars(select(AttemptRow)).one()
+        assert "build_diff" in att.log
+
+
+def test_a_patch_that_ships_something_new_publishes_when_the_check_is_on(
+    pending: sessionmaker[Session],
+) -> None:
+    p = replace(
+        pipeline(),
+        gates=replace(CFG, require_shipped_change=True),
+        shipped=ShippedFake(["usr/sbin/nginx"]),
+    )
+    assert process(pending, p, 1) is Outcome.PUBLISHED
+
+
+def test_no_control_is_built_while_the_check_is_off(pending: sessionmaker[Session]) -> None:
+    class Counting(fakes.FakeDistroAdapter):
+        controls = 0
+
+        def build_control(self, component: Component, patch: Patch) -> str:
+            Counting.controls += 1
+            return super().build_control(component, patch)
+
+    p = replace(pipeline(), adapter=Counting())
+    assert process(pending, p, 1) is Outcome.PUBLISHED
+    assert Counting.controls == 0

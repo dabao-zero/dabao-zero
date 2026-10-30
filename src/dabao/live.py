@@ -6,6 +6,7 @@ network. A tool that fails raises or returns None; none of them ever reports "cl
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import subprocess
@@ -187,6 +188,20 @@ class _Scan:
     changed: set[str]  # files the added layers wrote
     texts: dict[str, str]  # package databases and file lists the added layers wrote
     base_texts: dict[str, str]  # the same files as the base image had them
+    hashes: dict[str, str] = field(
+        default_factory=dict
+    )  # added regular files and links: content id
+
+
+def _member_id(t: tarfile.TarFile, member: tarfile.TarInfo) -> str:
+    """What makes a layer entry the same file again: its bytes, or its target for a link."""
+    if member.issym() or member.islnk():
+        return f"link:{member.linkname}"
+    digest = hashlib.sha256()
+    if (fh := t.extractfile(member)) is not None:
+        while chunk := fh.read(1 << 20):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def _dpkg_listing(texts: Mapping[str, str], package: str) -> str:
@@ -253,6 +268,10 @@ class OciDiffer:
                             (scan.texts if added else scan.base_texts)[name] = text
                         if added and not name.startswith(self.ignore_prefixes):
                             scan.changed.add(name)
+                        if added and not name.startswith(
+                            (*self.ignore_prefixes, *self.bookkeeping)
+                        ):
+                            scan.hashes[name] = _member_id(t, member)
             return scan
         except (OSError, KeyError, IndexError, tarfile.TarError, ValueError):
             return None
@@ -282,6 +301,16 @@ class OciDiffer:
         return sorted(
             f for f in scan.changed if f not in explained and not f.startswith(bookkeeping)
         )
+
+    def shipped_changes(self, control_digest: str, after_digest: str) -> list[str] | None:
+        """Files the patched build wrote whose bytes differ from the control build (same build,
+        no patch), or that only one of them wrote. Package-manager state is left out: it records
+        the file hashes, so it differs whenever they do."""
+        control, after = self._read(control_digest), self._read(after_digest)
+        if control is None or after is None:
+            return None
+        names = control.hashes.keys() | after.hashes.keys()
+        return sorted(n for n in names if control.hashes.get(n) != after.hashes.get(n))
 
     def rebuilt_packages(self, digest: str) -> list[tuple[str, str]] | None:
         """(binary package, version) of what the build re-versioned: what a VEX statement names."""

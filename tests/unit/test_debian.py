@@ -180,3 +180,25 @@ def test_a_package_that_pre_depends_on_another_rebuilt_one_still_installs() -> N
     df = render_dockerfile(COMP, BASE)
     first = "dpkg --log=/dev/null -i $keep || dpkg --log=/dev/null -i $keep;"
     assert first in df
+
+
+def test_the_control_build_is_the_same_build_without_the_patch(tmp_path: Path) -> None:
+    """DAB-83: the patched image is compared with a rebuild that differs only by the patch."""
+    docker = FakeDocker()
+    digest = adapter(tmp_path, docker).build_control(COMP, PATCH)
+    assert digest == OUT_DIGEST
+    (cmd,) = docker.calls
+    ctx = Path(cmd[-1])
+    df = (ctx / "Dockerfile").read_text()
+    assert "patch -p1" not in df and "patch -p1" in render_dockerfile(COMP, BASE)
+    assert df == render_dockerfile(COMP, BASE, apply_patch=False)
+    # same changelog entry, so the two builds differ in nothing but the patch
+    assert (ctx / "changelog.entry").read_text() == changelog_entry(COMP, PATCH, BASE)
+
+
+def test_control_and_patched_builds_do_not_share_a_cache_key(tmp_path: Path) -> None:
+    docker = FakeDocker()
+    a = adapter(tmp_path, docker)
+    a.build_image(COMP, PATCH)
+    a.build_control(COMP, PATCH)
+    assert docker.calls[0][-1] != docker.calls[1][-1]

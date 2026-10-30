@@ -12,7 +12,7 @@ from pathlib import Path
 from urllib.parse import parse_qsl, urlencode, urlsplit
 
 from dabao.models import Advisory, Patch, PatchSource
-from dabao.seams import BuildDiffer, Scanner, SuiteRunner, UpstreamFetcher
+from dabao.seams import BuildDiffer, Scanner, ShippedDiffer, SuiteRunner, UpstreamFetcher
 from dabao.upstream import containment_problem, patch_url
 from dabao.vex import VexStatement, write_openvex
 
@@ -54,6 +54,9 @@ class GateConfig:
     # ADR-0010 check 2 for every patch: the upstream commit, fetched by the gate, must be contained
     # in the patch diff. Always required for a VEX.
     require_containment: bool = False
+    # DAB-83: the patched build must differ in shipped files from a rebuild without the patch (the
+    # "control"). Stops a "fixed" claim for code the package does not build or ship.
+    require_shipped_change: bool = False
 
 
 @dataclass(frozen=True)
@@ -66,6 +69,8 @@ class GateInput:
     suite_runner: SuiteRunner | None = None
     differ: BuildDiffer | None = None
     upstream: UpstreamFetcher | None = None  # reads the commit the patch says it derives from
+    control_digest: str = ""  # the same build without the patch (DAB-83)
+    shipped: ShippedDiffer | None = None
     # What a VEX statement needs (ADR-0010): which binary packages were rebuilt, in which stream, a
     # directory to write the document in, and the time to put in it.
     rebuilt_packages: tuple[tuple[str, str], ...] = ()
@@ -265,6 +270,21 @@ def patch_paths(diff: str) -> set[str]:
     return paths
 
 
+def _shipped_problem(inp: GateInput) -> str:
+    """DAB-83. "" when the patched build ships files the control build (no patch) does not."""
+    if not inp.control_digest or inp.shipped is None:
+        return "no control build to compare with: cannot show the patch changes what ships"
+    changes = inp.shipped.shipped_changes(inp.control_digest, inp.after_digest)
+    if changes is None:
+        return "comparison with the control build could not run"
+    if not changes:
+        return (
+            "the patch changes nothing the package ships: the build is identical to a rebuild "
+            "without it (the fixed code may not be built)"
+        )
+    return ""
+
+
 def gate_build_diff(inp: GateInput, cfg: GateConfig) -> GateResult:
     name = "build_diff"
     if inp.differ is None:
@@ -280,6 +300,10 @@ def gate_build_diff(inp: GateInput, cfg: GateConfig) -> GateResult:
     )
     if unexpected:
         return GateResult(name, False, f"unexpected changes: {unexpected}")
+    if cfg.require_shipped_change:
+        problem = _shipped_problem(inp)
+        if problem:
+            return GateResult(name, False, problem)
     return GateResult(name, True, f"{len(changed)} changed file(s), all expected")
 
 

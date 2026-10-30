@@ -36,6 +36,7 @@ from dabao.seams import (
     DistroAdapter,
     Registry,
     Scanner,
+    ShippedDiffer,
     Signer,
     SuiteRunner,
     UpstreamFetcher,
@@ -84,6 +85,7 @@ class Pipeline:
     rebuilt: Callable[[str], Sequence[tuple[str, str]]] | None = None
     vex_dir: Path | None = None
     upstream: UpstreamFetcher | None = None  # ADR-0010 check 2
+    shipped: ShippedDiffer | None = None  # DAB-83
 
 
 class RecordingScanner:
@@ -211,6 +213,12 @@ def _attempt(session: Session, p: Pipeline, affected_id: int) -> Outcome:
         patch = result.patch
         before = p.adapter.build_image(component, None)
         after = p.adapter.build_image(component, patch)
+        build_control = getattr(p.adapter, "build_control", None)
+        control = (
+            build_control(component, patch)
+            if p.gates.require_shipped_change and build_control
+            else ""
+        )
         recorders = [RecordingScanner(s) for s in p.scanners]
         verdict = run_gates(
             GateInput(
@@ -222,6 +230,8 @@ def _attempt(session: Session, p: Pipeline, affected_id: int) -> Outcome:
                 p.suite_runner,
                 p.differ,
                 upstream=p.upstream,
+                control_digest=control,
+                shipped=p.shipped,
                 rebuilt_packages=tuple(p.rebuilt(after)) if p.rebuilt else (),
                 stream=component.stream,
                 vex_dir=p.vex_dir,

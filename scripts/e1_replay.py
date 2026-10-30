@@ -129,6 +129,11 @@ def main() -> int:
         "--vex", action="store_true", help="let the gate clear the CVE with a VEX (ADR-0010)"
     )
     p.add_argument(
+        "--shipped",
+        action="store_true",
+        help="also build a control without the patch; the patch must change what ships (DAB-83)",
+    )
+    p.add_argument(
         "--fix-ref",
         action="append",
         default=[],
@@ -192,9 +197,14 @@ def main() -> int:
         registry=fakes.FakeRegistry(),
         signer=fakes.FakeSigner(),
         clock=Clock(),
-        gates=GateConfig(provenance_allowlist=ALLOWLIST, vex_enabled=args.vex),
+        gates=GateConfig(
+            provenance_allowlist=ALLOWLIST,
+            vex_enabled=args.vex,
+            require_shipped_change=args.shipped,
+        ),
         limits=Limits(),
         upstream=upstream,
+        shipped=differ,
         vex_dir=vex_dir,
     )
     started = time.time()
