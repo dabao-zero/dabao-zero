@@ -57,8 +57,12 @@ def changelog_entry(component: Component, patch: Patch, base: DebianBase) -> str
     )
 
 
-def render_dockerfile(component: Component, base: DebianBase) -> str:
+def render_dockerfile(component: Component, base: DebianBase, *, apply_patch: bool = True) -> str:
+    """`apply_patch=False` is the control build of DAB-83: every step the same, minus the patch."""
     pin = f"{component.package}={component.version}"
+    patch_step = (
+        "patch -p1 --no-backup-if-mismatch < /ctx/patch.diff; \\\n    " if apply_patch else ""
+    )
     snap = f"http://snapshot.debian.org/archive/debian/{base.snapshot}/"
     sec = f"http://snapshot.debian.org/archive/debian-security/{base.snapshot}/"
     sources = (
@@ -80,8 +84,8 @@ WORKDIR /build
 RUN set -eu; apt-get source --download-only {pin}; dpkg-source -x ./*.dsc src
 COPY patch.diff changelog.entry /ctx/
 RUN set -eu; cd src; \\
-    patch -p1 --no-backup-if-mismatch < /ctx/patch.diff; \\
-    cat /ctx/changelog.entry debian/changelog > /tmp/changelog; mv /tmp/changelog debian/changelog
+    {patch_step}cat /ctx/changelog.entry debian/changelog > /tmp/changelog; \\
+    mv /tmp/changelog debian/changelog
 RUN set -eu; useradd --create-home --uid 1000 builder; chown -R builder:builder /build; \\
     runuser -u builder -- env SOURCE_DATE_EPOCH="$SOURCE_DATE_EPOCH" \\
       DEB_BUILD_OPTIONS="nocheck parallel=$(nproc)" \\
@@ -113,6 +117,13 @@ class DebianAdapter:
     def build_image(self, component: Component, patch: Patch | None) -> str:
         if patch is None:
             return self.base.digest
+        return self._build(component, patch, control=False)
+
+    def build_control(self, component: Component, patch: Patch) -> str:
+        """The patched build's twin without the patch (DAB-83): same source, changelog and steps."""
+        return self._build(component, patch, control=True)
+
+    def _build(self, component: Component, patch: Patch, *, control: bool) -> str:
         if component.stream != "debian":
             raise ValueError(f"the debian adapter cannot build the {component.stream} stream")
         if patch.component != component:
@@ -121,14 +132,15 @@ class DebianAdapter:
         check_debian_version(component.version)
         key = hashlib.sha256(
             json.dumps(
-                [component.model_dump(), patch.diff, self.base.digest, self.base.snapshot]
+                [component.model_dump(), patch.diff, self.base.digest, self.base.snapshot, control]
             ).encode()
         ).hexdigest()[:16]
         root = self.work_dir / key
         ctx, out = root / "ctx", root / "oci"
         ctx.mkdir(parents=True, exist_ok=True)
-        (ctx / "Dockerfile").write_text(render_dockerfile(component, self.base))
-        (ctx / "patch.diff").write_text(patch.diff)
+        dockerfile = render_dockerfile(component, self.base, apply_patch=not control)
+        (ctx / "Dockerfile").write_text(dockerfile)
+        (ctx / "patch.diff").write_text("" if control else patch.diff)
         (ctx / "changelog.entry").write_text(changelog_entry(component, patch, self.base))
         try:
             digest = build_oci(self.runner, self.builder, ctx, out, self.base.source_date_epoch)

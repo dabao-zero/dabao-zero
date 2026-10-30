@@ -54,6 +54,14 @@ def good_input() -> GateInput:
 
 
 @dataclass(frozen=True)
+class _Shipped:
+    changes: dict[tuple[str, str], list[str]]
+
+    def shipped_changes(self, control_digest: str, after_digest: str) -> list[str] | None:
+        return self.changes.get((control_digest, after_digest))
+
+
+@dataclass(frozen=True)
 class BadCase:
     label: str
     expected_gate: str
@@ -135,6 +143,16 @@ def _bad_cases() -> list[BadCase]:
                     {(BEFORE, AFTER): [*GOOD_CHANGED, "usr/sbin/nginx-extra-binary"]}
                 ),
             ),
+        ),
+        BadCase(
+            "patch builds identically to a rebuild without it (DAB-83)",
+            "build_diff",
+            replace(
+                g,
+                control_digest="sha256:control",
+                shipped=_Shipped({("sha256:control", AFTER): []}),
+            ),
+            replace(CFG, require_shipped_change=True),
         ),
         BadCase(
             "build comparison unavailable",

@@ -405,3 +405,68 @@ def test_an_arch_qualified_list_of_another_package_explains_nothing(tmp_path: Pa
     )
     src = ImageSource(BASE, "debian:slim", {digest: tmp_path})
     assert OciDiffer(src, base_layers=1).changed_files(BASE, digest) == ["usr/bin/evil"]
+
+
+# --- OciDiffer.shipped_changes (DAB-83) ---------------------------------------------------------
+
+
+def shipped_layout(tmp_path: Path, name: str, tar_bytes: bytes, extra: dict[str, bytes]) -> str:
+    root = tmp_path / name
+    root.mkdir()
+    return write_oci(
+        root,
+        [
+            layer({"bin/sh": b"base"}),
+            layer(
+                {
+                    "usr/bin/tar": tar_bytes,
+                    "var/lib/dpkg/status": STATUS,
+                    "var/lib/dpkg/info/tar.list": b"/.\n/bin/tar\n",
+                    **extra,
+                }
+            ),
+        ],
+    )
+
+
+def shipped_differ(tmp_path: Path, *digests: str) -> OciDiffer:
+    archives = {d: tmp_path / n for d, n in zip(digests, ("control", "patched"), strict=False)}
+    return OciDiffer(ImageSource(BASE, "debian:slim", archives), base_layers=1)
+
+
+def test_shipped_changes_names_the_files_whose_bytes_differ_from_the_control(
+    tmp_path: Path,
+) -> None:
+    control = shipped_layout(tmp_path, "control", b"old", {})
+    patched = shipped_layout(tmp_path, "patched", b"new", {})
+    assert shipped_differ(tmp_path, control, patched).shipped_changes(control, patched) == [
+        "usr/bin/tar"
+    ]
+
+
+def test_shipped_changes_is_empty_when_the_patched_build_is_the_control_bit_for_bit(
+    tmp_path: Path,
+) -> None:
+    control = shipped_layout(tmp_path, "control", b"same", {})
+    patched = shipped_layout(tmp_path, "patched", b"same", {})
+    assert shipped_differ(tmp_path, control, patched).shipped_changes(control, patched) == []
+
+
+def test_shipped_changes_sees_a_file_one_build_has_and_the_other_lacks(tmp_path: Path) -> None:
+    control = shipped_layout(tmp_path, "control", b"same", {})
+    patched = shipped_layout(tmp_path, "patched", b"same", {"usr/bin/extra": b"!"})
+    assert shipped_differ(tmp_path, control, patched).shipped_changes(control, patched) == [
+        "usr/bin/extra"
+    ]
+
+
+def test_shipped_changes_ignores_the_package_managers_own_state(tmp_path: Path) -> None:
+    control = shipped_layout(tmp_path, "control", b"same", {"var/lib/dpkg/info/tar.md5sums": b"a"})
+    patched = shipped_layout(tmp_path, "patched", b"same", {"var/lib/dpkg/info/tar.md5sums": b"b"})
+    assert shipped_differ(tmp_path, control, patched).shipped_changes(control, patched) == []
+
+
+def test_shipped_changes_is_none_when_either_image_cannot_be_read(tmp_path: Path) -> None:
+    patched = shipped_layout(tmp_path, "patched", b"x", {})
+    differ = OciDiffer(ImageSource(BASE, "debian:slim", {patched: tmp_path / "patched"}))
+    assert differ.shipped_changes("sha256:missing", patched) is None

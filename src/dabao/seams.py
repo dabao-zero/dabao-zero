@@ -79,3 +79,10 @@ class BuildDiffer(Protocol):
     def changed_files(self, before_digest: str, after_digest: str) -> list[str] | None:
         """Files that differ between two builds. None means the comparison could not run."""
         ...
+
+
+class ShippedDiffer(Protocol):
+    def shipped_changes(self, control_digest: str, after_digest: str) -> list[str] | None:
+        """Files whose bytes differ between a build without the patch and the patched build, or
+        exist in only one. None means the comparison could not run."""
+        ...

@@ -36,6 +36,10 @@ class FakeDistroAdapter:
         key = f"{component.stream}-{component.package}-{component.version}-{suffix}"
         return "sha256:" + hashlib.sha256(key.encode()).hexdigest()
 
+    def build_control(self, component: Component, patch: Patch) -> str:
+        key = f"{component.stream}-{component.package}-{component.version}-control"
+        return "sha256:" + hashlib.sha256(key.encode()).hexdigest()
+
 
 @dataclass
 class FakeScanner:
